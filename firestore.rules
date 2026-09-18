@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(leagueId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid));
+    }
+
+    match /user_profiles/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /leagues/{leagueId} {
+      allow read: if signedIn();
+      allow write: if signedIn(); // Simplificado para RC1; controle via App Logic
+
+      match /members/{uid} {
+        allow read, write: if signedIn();
+      }
+
+      match /{collection}/{documentId} {
+        allow read, write: if isMember(leagueId);
+      }
+    }
+
+    match /invites/{code} {
+      allow read, write: if signedIn();
+    }
+
+    match /system_status/{document=**} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+  }
+}

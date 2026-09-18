@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1005402262877",
+    "project_id": "legacy-master-liga",
+    "storage_bucket": "legacy-master-liga.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1005402262877:android:48c0e8ed4e42ebf3af6cb4",
+        "android_client_info": {
+          "package_name": "com.example.legacymasterliga"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqzmE1ghX9S4BJCgmLDIhFmcR9M-WfE8I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

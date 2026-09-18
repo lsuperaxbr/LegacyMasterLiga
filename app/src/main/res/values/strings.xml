@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Legacy Master Liga</string>
+    <string name="login_tagline">Sua liga, sua história, seu legado.</string>
+    <string name="login_username">Usuário</string>
+    <string name="login_password">Senha</string>
+    <string name="login_show_password">Mostrar senha</string>
+    <string name="login_hide_password">Ocultar senha</string>
+    <string name="login_action">Entrar</string>
+    <string name="login_first_access">Primeiro acesso: admin / admin123</string>
+    <string name="state_loading">Carregando…</string>
+    <string name="state_error_title">Não foi possível concluir</string>
+    <string name="state_retry">Tentar novamente</string>
+</resources>

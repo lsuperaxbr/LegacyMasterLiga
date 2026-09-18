@@ -1,0 +1,37 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Glow Effect (Círculo difuso externo) -->
+    <path
+        android:pathData="M100,20a80,80 0,1 0,0 160a80,80 0,1 0,0 -160"
+        android:fillColor="#1A00FFCC" />
+
+    <!-- Círculo Base da Bola -->
+    <path
+        android:pathData="M100,30a70,70 0,1 1,0 140a70,70 0,1 1,0 -140"
+        android:strokeColor="#00FFCC"
+        android:strokeWidth="2"
+        android:fillColor="#001226" />
+
+    <!-- Hexágonos e Linhas de Futebol Estilizadas -->
+    <path
+        android:pathData="M100,30 L100,55 M100,145 L100,170 M30,100 L55,100 M145,100 L170,100"
+        android:strokeColor="#00FFCC"
+        android:strokeWidth="2" />
+
+    <path
+        android:pathData="M70,70 L85,85 M130,70 L115,85 M70,130 L85,115 M130,130 L115,115"
+        android:strokeColor="#00FFCC"
+        android:strokeWidth="2" />
+
+    <!-- Pentágono Central Neon -->
+    <path
+        android:pathData="M100,85 L115,95 L110,115 L90,115 L85,95 Z"
+        android:strokeColor="#00FFCC"
+        android:strokeWidth="1.5"
+        android:fillColor="#3300FFCC" />
+
+</vector>
