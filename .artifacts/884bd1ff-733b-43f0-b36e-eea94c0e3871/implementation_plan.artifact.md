@@ -1,46 +1,32 @@
-# Plano de Correção: Permissões do Firestore e Robustez do Sync
+# Plano de Implementação: Correção de Sync da Arena (Mapeamento de Clubes)
 
-Corrigiremos a falha de sincronização causada por `PERMISSION_DENIED` na consulta de `collectionGroup`, garantindo que o sistema de descoberta de ligas seja resiliente a falhas parciais e que as regras de segurança do Firebase permitam a consulta necessária.
+Esta tarefa visa corrigir um erro de sincronização onde os duelos da Arena aparecem com os clubes trocados ou errados em dispositivos diferentes. O problema ocorre porque os IDs locais dos clubes estão sendo enviados diretamente, em vez de serem resolvidos para IDs globais (`cloudId`).
 
-## User Review Required
-
-> [!IMPORTANT]
-> Esta correção exige a atualização das **Regras de Segurança do Firestore** no Console do Firebase após o deploy do código. Sem isso, a consulta global continuará falhando (embora o app agora vá ignorar o erro e seguir com as ligas verificadas diretamente).
-
-## Proposed Changes
-
-### [Firebase Configuration]
-
-#### [MODIFY] [firestore.rules](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/firestore.rules)
-- Adicionar regra de recursão para a coleção `members`, permitindo consultas do tipo `collectionGroup` para usuários autenticados.
-
-```rules
-match /{path=**}/members/{memberId} {
-  allow read, write: if signedIn();
-}
-```
+## Proposta de Mudanças
 
 ### [Online Sync Component]
 
 #### [MODIFY] [OnlineSportsSyncManager.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt)
 
-1.  **Isolamento da Consulta Global**: Envolver o bloco que executa `firestore.collectionGroup("members")` em um `try-catch` específico.
-2.  **Continuidade do Fluxo**: Se a consulta global falhar, logar um aviso (`syncLog`), mas permitir que o código prossiga para a comparação de `verifiedRoles` com o cache atual.
-3.  **Preservação do Progresso**: Garantir que as ligas encontradas via Perfil do Usuário sejam aplicadas mesmo que o Scan Global falhe.
+1.  **Mapeamento no Upload (`buildPayload`)**:
+    *   No bloco `"ARENA"`, resolver `clubAId` e `clubBId` para seus respectivos `cloudId` usando a função `ensureRecord`.
+    *   Substituir as chaves `"clubAId"` e `"clubBId"` no payload por `"clubACloudId"` e `"clubBCloudId"`.
 
-## Verification Plan
+2.  **Mapeamento no Recebimento (`applyArena`)**:
+    *   Atualizar a assinatura de `applyArena` para receber `leagueId: String` (o ID da nuvem).
+    *   Dentro da função, resolver `"clubACloudId"` e `"clubBCloudId"` de volta para IDs locais usando `syncDao.findRecordByCloudId`.
+    *   Lançar `DependencyPendingException` caso algum clube ainda não tenha sido sincronizado localmente (garantindo a ordem correta de processamento).
+    *   Atualizar a criação da entidade `ArenaDuelEntity` para usar os IDs locais recuperados.
 
-### Manual Verification
-1.  **Aplicar Regras**: Copiar o conteúdo de `firestore.rules` para o Console do Firebase e publicar.
-2.  **Limpeza**: No app, abrir o "Diagnóstico de Sync" e verificar se o erro de permissão desapareceu (após o refresh automático).
-3.  **Teste de Sync**: Realizar uma transferência ou alteração financeira.
-4.  **Confirmar Envio**:
-    - Verificar na tela de Diagnóstico se a seção "Fila PENDING" é esvaziada.
-    - Confirmar no Firestore Console se os documentos de `financial_transactions` ou `clubs` foram atualizados.
+3.  **Atualização da Chamada (`applyRemote`)**:
+    *   Ajustar a chamada de `applyArena` para passar o `leagueId` (string) como argumento, mantendo o padrão usado por outros tipos como `MATCH` e `GOAL_EVENT`.
 
-### Instruções para o Usuário
-Após eu concluir as alterações nos arquivos locais:
-1. Abra o arquivo `firestore.rules` no seu editor.
-2. Copie todo o conteúdo.
-3. Vá ao **Firebase Console** > **Firestore Database** > Aba **Rules**.
-4. Cole o conteúdo e clique em **Publish**.
+## Plano de Verificação
+
+### Verificação de Build
+- Executar `Clean Project` seguido de `Rebuild Project` para garantir que as mudanças na assinatura da função e nos tipos de dados não quebraram a compilação.
+
+### Testes Manuais (Simulação)
+- Criar um duelo de Arena no Dispositivo A.
+- Verificar (via log ou diagnóstico) se o payload enviado contém `clubACloudId` e `clubBCloudId`.
+- No Dispositivo B, verificar se o duelo é recebido e se os clubes exibidos na interface correspondem aos clubes reais, independentemente de seus IDs locais serem diferentes dos do Dispositivo A.

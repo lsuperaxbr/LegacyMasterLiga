@@ -650,8 +650,10 @@ class OnlineSportsSyncManager @Inject constructor(
                 )
             }
             "ARENA" -> database.arenaDao().findById(operation.localId)?.let { d ->
+                val clubA = ensureRecord("CLUB", d.clubAId, operation.cloudLeagueId)
+                val clubB = ensureRecord("CLUB", d.clubBId, operation.cloudLeagueId)
                 common + mapOf(
-                    "leagueId" to d.leagueId, "clubAId" to d.clubAId, "clubBId" to d.clubBId,
+                    "leagueId" to d.leagueId, "clubACloudId" to clubA.cloudId, "clubBCloudId" to clubB.cloudId,
                     "stakeCr" to d.stakeCr, "status" to d.status, "resultType" to d.resultType,
                     "note" to d.note, "createdByUserId" to d.createdByUserId,
                     "createdAt" to d.createdAt, "resolvedAt" to d.resolvedAt,
@@ -805,7 +807,7 @@ class OnlineSportsSyncManager @Inject constructor(
                         "TRANSFER" -> applyTransfer(localLeague.id, leagueId, existingRecord?.localId, data)
                         "PLAYER" -> applyPlayer(localLeague.id, leagueId, existingRecord?.localId, data)
                         "NEWS" -> applyNews(localLeague.id, existingRecord?.localId, data)
-                        "ARENA" -> applyArena(localLeague.id, existingRecord?.localId, data)
+                        "ARENA" -> applyArena(localLeague.id, leagueId, existingRecord?.localId, data)
                         "GOAL_EVENT" -> applyGoalEvent(localLeague.id, leagueId, existingRecord?.localId, data)
                         "AUCTION_LOT" -> applyAuctionLot(localLeague.id, leagueId, existingRecord?.localId, data)
                         "AUCTION_ITEM" -> applyAuctionItem(localLeague.id, leagueId, existingRecord?.localId, data)
@@ -1091,14 +1093,18 @@ class OnlineSportsSyncManager @Inject constructor(
         return if (current == null) newsDao.upsert(entity) else current.id.also { newsDao.upsert(entity) }
     }
 
-    private suspend fun applyArena(leagueLocalId: Long, existingId: Long?, d: Map<String, Any>): Long {
+    private suspend fun applyArena(leagueLocalId: Long, leagueId: String, existingId: Long?, d: Map<String, Any>): Long {
         val arenaDao = database.arenaDao()
+        val clubAId = syncDao.findRecordByCloudId(leagueId, "CLUB", d.string("clubACloudId"))?.localId
+            ?: throw DependencyPendingException()
+        val clubBId = syncDao.findRecordByCloudId(leagueId, "CLUB", d.string("clubBCloudId"))?.localId
+            ?: throw DependencyPendingException()
         val current = existingId?.let { arenaDao.findById(it) }
         val entity = com.example.legacymasterliga.core.database.entity.ArenaDuelEntity(
             id = current?.id ?: 0,
             leagueId = leagueLocalId,
-            clubAId = d.long("clubAId"),
-            clubBId = d.long("clubBId"),
+            clubAId = clubAId,
+            clubBId = clubBId,
             stakeCr = d.long("stakeCr"),
             status = d.string("status"),
             resultType = d.string("resultType").takeIf { it.isNotBlank() },

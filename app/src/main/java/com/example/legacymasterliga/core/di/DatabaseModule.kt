@@ -671,6 +671,30 @@ object DatabaseModule {
         }
     }
 
+    private val migration27To28 = object : Migration(27, 28) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS club_presidencies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    clubId INTEGER NOT NULL,
+                    userId INTEGER NOT NULL,
+                    startAt INTEGER NOT NULL,
+                    endAt INTEGER
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_club_presidencies_clubId ON club_presidencies(clubId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_club_presidencies_userId ON club_presidencies(userId)")
+
+            // Semear um registro aberto para cada clube que já tem presidente hoje
+            db.execSQL("""
+                INSERT INTO club_presidencies (clubId, userId, startAt, endAt)
+                SELECT id, presidentUserId, ${System.currentTimeMillis()}, NULL
+                FROM clubs
+                WHERE presidentUserId IS NOT NULL AND isBank = 0
+            """)
+        }
+    }
+
     /** Complete, ordered migration chain. Keep new migrations appended and covered by tests. */
     val migrations: Array<Migration> = arrayOf(
         migration1To2,
@@ -699,6 +723,7 @@ object DatabaseModule {
         migration24To25,
         migration25To26,
         migration26To27,
+        migration27To28,
     )
 
     @Provides
@@ -734,6 +759,7 @@ object DatabaseModule {
     @Provides fun provideSeasonClosureDao(database: AppDatabase): SeasonClosureDao = database.seasonClosureDao()
     @Provides fun providePrizeDao(database: AppDatabase): PrizeDao = database.prizeDao()
     @Provides fun providePresidentProfileDao(database: AppDatabase): com.example.legacymasterliga.core.database.dao.PresidentProfileDao = database.presidentProfileDao()
+    @Provides fun provideClubPresidencyDao(database: AppDatabase): com.example.legacymasterliga.core.database.dao.ClubPresidencyDao = database.clubPresidencyDao()
 
     @Provides
     fun provideHallOfFameDao(database: AppDatabase): HallOfFameDao = database.hallOfFameDao()

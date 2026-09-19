@@ -1,36 +1,46 @@
-# Walkthrough: Resiliência de Sincronismo e Permissões Firestore
+# Walkthrough: Melhorias de Integridade e Sincronismo
 
-Corrigimos a falha de sincronização causada por erros de permissão (`PERMISSION_DENIED`) no Firestore e tornamos o processo de descoberta de ligas mais resiliente.
+Este documento resume as implementações recentes focadas na integridade histórica dos presidentes e na correção de bugs de sincronismo.
 
-## Mudanças Realizadas
+---
 
-### [Configuração do Firebase]
+## 1. Histórico de Presidência de Clube
 
-#### [firestore.rules](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/firestore.rules)
-- **Suporte a Collection Group**: Adicionada uma regra recursiva que permite consultas globais na coleção `members`. Isso é essencial para que o app descubra em quais ligas o usuário está inscrito sem precisar saber os IDs das ligas antecipadamente.
+Implementamos o sistema de histórico de donos de clubes para garantir a integridade das estatísticas de carreira dos presidentes.
 
-### [Componente de Sincronismo]
+### Mudanças Realizadas
 
-#### [OnlineSportsSyncManager.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt)
-- **Isolamento de Erros**: A consulta de Scan Global (que disparava o erro de permissão) agora está isolada em seu próprio bloco `try-catch`.
-- **Resiliência**: Se o Scan Global falhar (por rede ou permissão), o app não interrompe mais o processo de sincronismo. Ele prossegue utilizando as ligas já confirmadas através do perfil do usuário, garantindo que o sincronismo funcione mesmo em cenários de erro parcial.
-- **Continuidade**: Após o refresh, o sistema dispara automaticamente o envio dos itens pendentes na fila.
+#### [Persistência]
 
-## Instruções de Publicação (Ação Necessária)
+- **[AppDatabase.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/database/AppDatabase.kt)**: Incrementada a versão do banco para **28** e registrada a nova entidade `ClubPresidencyEntity`.
+- **[ClubPresidencyEntity.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/database/entity/ClubPresidencyEntity.kt)** [NEW]: Define a tabela `club_presidencies` que armazena os períodos de presidência.
+- **[DatabaseModule.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/di/DatabaseModule.kt)**: Migration 27 -> 28 com semeio de dados iniciais baseado nos presidentes atuais.
 
-> [!IMPORTANT]
-> Você deve atualizar as regras no console do Firebase para que a correção tenha efeito completo:
-> 1. Abra o arquivo [firestore.rules](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/firestore.rules) no Android Studio.
-> 2. Copie todo o texto.
-> 3. Vá ao [Firebase Console](https://console.firebase.google.com/).
-> 4. Acesse **Firestore Database** > aba **Rules**.
-> 5. Cole o código e clique em **Publish**.
+#### [Lógica de Negócio]
 
-## Como Verificar a Correção
+- **[RoomClubRepository.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/data/repository/RoomClubRepository.kt)**: Atualizada a função `update()` para fechar o período de presidência anterior e abrir um novo ao detectar troca de dono.
+- **[PresidentProfileDao.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/database/dao/PresidentProfileDao.kt)**: Estatísticas agora são atribuídas baseadas no período de presidência ativo no momento da criação da temporada (`seasons.createdAt`).
 
-1. **Abra o Diagnóstico**: Vá em **Configurações** > **Diagnóstico de Sync**.
-2. **Observe os Logs**: O erro `PERMISSION_DENIED` não deve mais aparecer após a publicação das regras.
-3. **Teste de Envio**:
-   - Faça uma alteração financeira ou transferência.
-   - Volte ao Diagnóstico.
-   - A seção **"Fila PENDING"** deve esvaziar em poucos segundos, indicando sucesso no upload.
+---
+
+## 2. Correção de Sync da Arena (Mapeamento de Clubes)
+
+Corrigimos o bug onde os duelos da Arena trocavam de clubes ao serem sincronizados entre aparelhos diferentes.
+
+### Mudanças Realizadas
+
+#### [Sincronismo Online]
+
+- **[OnlineSportsSyncManager.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt)**:
+    - **Upload**: O payload da Arena agora utiliza `clubACloudId` e `clubBCloudId` (IDs globais) em vez de IDs locais crus.
+    - **Recebimento**: A função `applyArena` agora resolve esses IDs globais de volta para os IDs locais corretos do dispositivo receptor, garantindo que o duelo aponte para os clubes certos.
+    - **Integridade**: Adicionado tratamento de dependência pendente (caso o clube ainda não tenha sido sincronizado localmente).
+
+## Resultados dos Testes
+
+### Verificação de Build
+- O projeto foi compilado com sucesso (Build Finished Successfully).
+
+### Integridade de Dados
+- Duelos de Arena criados após esta correção serão exibidos corretamente em todos os dispositivos da liga.
+- As estatísticas de carreira dos presidentes estão agora protegidas contra trocas de comando de clubes.

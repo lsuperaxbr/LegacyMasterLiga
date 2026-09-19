@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import com.example.legacymasterliga.core.database.converter.LegacyTypeConverters
 import com.example.legacymasterliga.core.database.dao.AuditLogDao
 import com.example.legacymasterliga.core.database.dao.ClubDao
+import com.example.legacymasterliga.core.database.dao.ClubPresidencyDao
 import com.example.legacymasterliga.core.database.dao.CompetitionDao
 import com.example.legacymasterliga.core.database.dao.DashboardDao
 import com.example.legacymasterliga.core.database.dao.CompetitionParticipantDao
@@ -32,6 +33,7 @@ import com.example.legacymasterliga.core.database.dao.UserDao
 import com.example.legacymasterliga.core.database.dao.SettingsDao
 import com.example.legacymasterliga.core.database.entity.AuditLogEntity
 import com.example.legacymasterliga.core.database.entity.ClubEntity
+import com.example.legacymasterliga.core.database.entity.ClubPresidencyEntity
 import com.example.legacymasterliga.core.database.entity.CompetitionEntity
 import com.example.legacymasterliga.core.database.entity.CompetitionParticipantEntity
 import com.example.legacymasterliga.core.database.entity.FinancialTransactionEntity
@@ -59,7 +61,7 @@ import com.example.legacymasterliga.core.database.entity.GoalEventEntity
 
 /** Single source of truth for the on-device database contract. */
 object DatabaseContract {
-    const val VERSION = 27
+    const val VERSION = 28
     const val NAME = "legacy_master_liga.db"
     const val OLDEST_SUPPORTED_VERSION = 1
 }
@@ -96,6 +98,7 @@ object DatabaseContract {
         com.example.legacymasterliga.core.database.entity.AuctionLotEntity::class,
         com.example.legacymasterliga.core.database.entity.AuctionItemEntity::class,
         com.example.legacymasterliga.core.database.entity.AuctionBidEntity::class,
+        ClubPresidencyEntity::class,
     ],
     version = DatabaseContract.VERSION,
     exportSchema = true,
@@ -128,6 +131,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun reportDao(): ReportDao
     abstract fun onlineSyncDao(): OnlineSyncDao
     abstract fun presidentProfileDao(): PresidentProfileDao
+    abstract fun clubPresidencyDao(): ClubPresidencyDao
     abstract fun arenaDao(): com.example.legacymasterliga.core.database.dao.ArenaDao
     abstract fun goalEventDao(): com.example.legacymasterliga.core.database.dao.GoalEventDao
     abstract fun auctionDao(): com.example.legacymasterliga.core.database.dao.AuctionDao

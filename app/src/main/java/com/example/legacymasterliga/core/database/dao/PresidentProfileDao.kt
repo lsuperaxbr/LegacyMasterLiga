@@ -37,8 +37,10 @@ interface PresidentProfileDao {
     @Query("""
         SELECT COUNT(DISTINCT s.id) FROM seasons s
         JOIN standings st ON st.seasonId = s.id
-        JOIN clubs cl ON cl.id = st.clubId
-        WHERE cl.presidentUserId = :userId
+        JOIN club_presidencies cp ON cp.clubId = st.clubId
+        WHERE cp.userId = :userId
+          AND s.createdAt >= cp.startAt
+          AND (cp.endAt IS NULL OR s.createdAt <= cp.endAt)
     """)
     fun observeSeasonsPlayed(userId: Long): Flow<Int>
 
@@ -53,8 +55,11 @@ interface PresidentProfileDao {
             COALESCE(SUM(st.goalsAgainst), 0) AS goalsAgainst,
             COALESCE(SUM(st.points), 0) AS points
         FROM standings st
-        JOIN clubs cl ON cl.id = st.clubId
-        WHERE cl.presidentUserId = :userId
+        JOIN seasons s ON s.id = st.seasonId
+        JOIN club_presidencies cp ON cp.clubId = st.clubId
+        WHERE cp.userId = :userId
+          AND s.createdAt >= cp.startAt
+          AND (cp.endAt IS NULL OR s.createdAt <= cp.endAt)
     """)
     fun observeCareerTotals(userId: Long): Flow<PresidentCareerRow>
 

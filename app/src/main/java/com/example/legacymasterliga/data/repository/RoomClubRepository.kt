@@ -3,8 +3,10 @@ package com.example.legacymasterliga.data.repository
 import androidx.room.withTransaction
 import com.example.legacymasterliga.core.database.AppDatabase
 import com.example.legacymasterliga.core.database.dao.ClubDao
+import com.example.legacymasterliga.core.database.dao.ClubPresidencyDao
 import com.example.legacymasterliga.core.database.dao.FinancialDao
 import com.example.legacymasterliga.core.database.entity.ClubEntity
+import com.example.legacymasterliga.core.database.entity.ClubPresidencyEntity
 import com.example.legacymasterliga.core.database.entity.FinancialTransactionEntity
 import com.example.legacymasterliga.data.mapper.toDomain
 import com.example.legacymasterliga.feature.audit.domain.AuditLogger
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.map
 class RoomClubRepository @Inject constructor(
     private val database: AppDatabase,
     private val clubDao: ClubDao,
+    private val clubPresidencyDao: ClubPresidencyDao,
     private val financialDao: FinancialDao,
     private val auditLogger: AuditLogger,
 ) : ClubRepository {
@@ -97,6 +100,20 @@ class RoomClubRepository @Inject constructor(
     ) {
         val current = requireNotNull(clubDao.findById(clubId)) { "Clube não encontrado." }
         require(!current.isBank) { "O Banco da Liga não pode ser editado por esta tela." }
+
+        if (presidentUserId != current.presidentUserId) {
+            val now = System.currentTimeMillis()
+            // Fecha o período do presidente anterior, se houver
+            clubPresidencyDao.findOpenByClub(clubId)?.let { open ->
+                clubPresidencyDao.update(open.copy(endAt = now))
+            }
+            // Abre um novo período para o novo presidente, se houver um
+            if (presidentUserId != null) {
+                clubPresidencyDao.insert(ClubPresidencyEntity(
+                    clubId = clubId, userId = presidentUserId, startAt = now, endAt = null,
+                ))
+            }
+        }
 
         clubDao.update(
             current.copy(

@@ -1,6 +1,6 @@
-# Tarefas: Correção de Permissões e Resiliência de Sync
+# Tarefas: Correção de Sync da Arena
 
-- `[x]` Atualizar `firestore.rules` com suporte a `collectionGroup`
-- `[x]` Isolar consulta `collectionGroup` em `OnlineSportsSyncManager` com try-catch próprio
-- `[x]` Garantir que falhas no Scan Global não interrompam o refresh
+- `[x]` Corrigir montagem de payload (Upload) em `OnlineSportsSyncManager.kt`
+- `[x]` Atualizar assinatura e lógica de `applyArena` (Recebimento)
+- `[x]` Ajustar chamada de `applyArena` no bloco `applyRemote`
 - `[x]` Validar compilação
