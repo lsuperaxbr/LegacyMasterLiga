@@ -114,6 +114,9 @@ interface OnlineSyncDao {
     @Query("SELECT COUNT(*) FROM online_sync_queue WHERE status = 'PENDING'")
     fun observePendingCount(): Flow<Int>
 
+    @Query("SELECT * FROM online_sync_queue WHERE status = 'PENDING' ORDER BY createdAt DESC")
+    fun observePendingQueue(): Flow<List<OnlineSyncQueueEntity>>
+
     @Query("SELECT COUNT(*) FROM online_sync_records WHERE status = 'CONFLICT'")
     fun observeConflictCount(): Flow<Int>
 

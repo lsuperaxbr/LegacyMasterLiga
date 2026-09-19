@@ -93,6 +93,21 @@ class OnlineSportsSyncManager @Inject constructor(
     @Volatile private var latestCandidates: List<OnlineSyncCandidate> = emptyList()
     @Volatile private var authenticatedProfileUid: String? = null
     @Volatile private var activeMembershipRoles: Map<String, String> = emptyMap()
+    private val logBuffer = java.util.Collections.synchronizedList(mutableListOf<String>())
+
+    private fun syncLog(msg: String, error: Throwable? = null) {
+        if (error != null) Log.d(TAG, msg, error) else Log.d(TAG, msg)
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val suffix = error?.let { " | Erro: ${it.message}" } ?: ""
+        logBuffer.add(0, "[$timestamp] $msg$suffix")
+        if (logBuffer.size > 20) logBuffer.removeAt(logBuffer.size - 1)
+    }
+
+    fun getDiagnosticInfo() = mapOf(
+        "uid" to (authenticatedProfileUid ?: "Nulo"),
+        "memberships" to activeMembershipRoles.map { "${it.key}|${it.value}" },
+        "logs" to logBuffer.toList()
+    )
 
     private val activeMembershipLeagueIds: Set<String>
         get() = activeMembershipRoles.keys
@@ -103,7 +118,18 @@ class OnlineSportsSyncManager @Inject constructor(
      */
     fun startAuthenticatedSession(profile: CloudUserProfile) {
         val firebaseUser = auth.currentUser
-        if (firebaseUser == null || firebaseUser.uid != profile.firebaseUid || profile.status != ACTIVE) {
+        if (firebaseUser == null) {
+            syncLog( "Falha no bootstrap: Usuário Firebase é nulo.")
+            disableSession()
+            return
+        }
+        if (firebaseUser.uid != profile.firebaseUid) {
+            syncLog( "Falha no bootstrap: UID mismatch (Auth=${firebaseUser.uid} != Profile=${profile.firebaseUid}).")
+            disableSession()
+            return
+        }
+        if (profile.status != ACTIVE) {
+            syncLog( "Falha no bootstrap: Perfil inativo (${profile.status}).")
             disableSession()
             return
         }
@@ -114,13 +140,16 @@ class OnlineSportsSyncManager @Inject constructor(
 
         if (started.compareAndSet(false, true)) {
             auth.addAuthStateListener { currentAuth ->
-                if (currentAuth.currentUser?.uid != authenticatedProfileUid) disableSession()
+                if (currentAuth.currentUser?.uid != authenticatedProfileUid) {
+                    syncLog( "Sessão invalidada por mudança de estado Auth.")
+                    disableSession()
+                }
             }
             firestore.addSnapshotsInSyncListener { scope.launch { flushQueue() } }
 
             // Otimização #2: Inicia listeners imediatamente com base no cache
             if (activeMembershipLeagueIds.isNotEmpty()) {
-                Log.d(TAG, "Iniciando listeners via CACHE para: $activeMembershipLeagueIds")
+                syncLog( "Iniciando listeners via CACHE para: $activeMembershipLeagueIds")
                 scope.launch { refreshListeners() }
             }
 
@@ -130,11 +159,11 @@ class OnlineSportsSyncManager @Inject constructor(
                 listeners["PROFILE"] = listOf(
                     profileRef.addSnapshotListener { snapshot, error ->
                         if (error != null) {
-                            Log.e(TAG, "Erro no listener de perfil", error)
+                            syncLog( "Erro no listener de perfil", error)
                             return@addSnapshotListener
                         }
                         if (snapshot != null && snapshot.exists()) {
-                            Log.d(TAG, "Perfil atualizado no Firestore. Agendando validação de memberships...")
+                            syncLog( "Perfil atualizado no Firestore. Agendando validação de memberships...")
                             scope.launch { refreshMemberships() }
                         }
                     }
@@ -143,6 +172,7 @@ class OnlineSportsSyncManager @Inject constructor(
 
             scope.launch {
                 leagueDao.observeOnline().collectLatest {
+                    syncLog( "Mudança observada em ligas locais. Atualizando memberships...")
                     refreshMemberships()
                 }
             }
@@ -154,8 +184,9 @@ class OnlineSportsSyncManager @Inject constructor(
             }
         }
         
-        // Otimização #2: Refresh em segundo plano para não travar a UI/Inicialização
+        // Correção de Bug: Dispara refresh IMEDIATAMENTE e incondicionalmente no bootstrap
         scope.launch {
+            syncLog( "Bootstrap: Iniciando refreshMemberships incondicional.")
             // Carga Imediata: Se o perfil já diz qual é a liga, espelha agora mesmo
             profile.cloudLeagueId?.let { leagueId ->
                 ensureLocalLeagueMirror(leagueId)
@@ -173,15 +204,32 @@ class OnlineSportsSyncManager @Inject constructor(
     }
 
     private fun syncEnabled(leagueId: String): Boolean {
-        val uid = authenticatedProfileUid ?: return false
-        return auth.currentUser?.uid == uid && leagueId.isNotBlank() && leagueId in activeMembershipLeagueIds
+        val uid = authenticatedProfileUid
+        if (uid == null) {
+            syncLog( "Sync ignorado: authenticatedProfileUid é nulo.")
+            return false
+        }
+        val currentUserUid = auth.currentUser?.uid
+        if (currentUserUid != uid) {
+            syncLog( "Sync ignorado: UID mismatch (Auth=$currentUserUid != Session=$uid).")
+            return false
+        }
+        if (leagueId.isBlank()) {
+            syncLog( "Sync ignorado: leagueId está em branco.")
+            return false
+        }
+        if (leagueId !in activeMembershipLeagueIds) {
+            syncLog( "Sync ignorado: Liga $leagueId não encontrada nas memberships ativas ($activeMembershipLeagueIds).")
+            return false
+        }
+        return true
     }
 
     private suspend fun refreshMemberships() {
         val uid = authenticatedProfileUid ?: return
         if (auth.currentUser?.uid != uid) return
         
-        Log.d(TAG, "Validando memberships com o servidor para $uid")
+        syncLog( "Validando memberships com o servidor para $uid")
 
         val verifiedRoles = mutableMapOf<String, String>()
         val leaguesToPull = mutableSetOf<String>()
@@ -206,40 +254,45 @@ class OnlineSportsSyncManager @Inject constructor(
                         if (leagueId !in activeMembershipLeagueIds) leaguesToPull += leagueId
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Falha ao verificar liga $leagueId do perfil", e)
+                    syncLog( "Falha ao verificar liga $leagueId do perfil", e)
                 }
             }
 
             // 2. Scan Global (Vizinhança): Caso o usuário seja membro de outras ligas
-            val membershipsQuery = firestore.collectionGroup("members")
-                .whereEqualTo("firebaseUid", uid)
-                .get().await()
-            
-            membershipsQuery.documents.forEach { memberDoc ->
-                val leagueId = memberDoc.reference.parent.parent?.id
-                if (leagueId != null && leagueId !in verifiedRoles && memberDoc.getString("status") == ACTIVE) {
-                    val role = memberDoc.getString("role") ?: "PRESIDENT"
-                    verifiedRoles[leagueId] = role
-                    ensureLocalLeagueMirror(leagueId)
-                    if (leagueId !in activeMembershipLeagueIds) leaguesToPull += leagueId
+            try {
+                val membershipsQuery = firestore.collectionGroup("members")
+                    .whereEqualTo("firebaseUid", uid)
+                    .get().await()
+                
+                membershipsQuery.documents.forEach { memberDoc ->
+                    val leagueId = memberDoc.reference.parent.parent?.id
+                    if (leagueId != null && leagueId !in verifiedRoles && memberDoc.getString("status") == ACTIVE) {
+                        val role = memberDoc.getString("role") ?: "PRESIDENT"
+                        verifiedRoles[leagueId] = role
+                        ensureLocalLeagueMirror(leagueId)
+                        if (leagueId !in activeMembershipLeagueIds) leaguesToPull += leagueId
+                    }
                 }
+            } catch (e: Exception) {
+                syncLog("Falha no Scan Global de memberships. Prosseguindo com ligas do perfil.", e)
             }
 
             if (verifiedRoles != activeMembershipRoles) {
-                Log.d(TAG, "Mudança de memberships detectada pelo servidor: $verifiedRoles")
+                syncLog( "Mudança de memberships detectada pelo servidor: $verifiedRoles")
                 activeMembershipRoles = verifiedRoles
                 saveMembershipCache(uid, verifiedRoles)
                 refreshListeners()
             } else {
-                Log.d(TAG, "Memberships confirmadas (sem alterações).")
+                syncLog( "Memberships confirmadas (sem alterações).")
             }
 
             // Carga inicial para novas ligas detectadas
             leaguesToPull.forEach { leagueId -> scope.launch { pullAll(leagueId) } }
             
+            syncLog( "RefreshMemberships concluído. Disparando scanAndFlush.")
             scanAndFlush()
         } catch (e: Exception) {
-            Log.e(TAG, "Falha no refreshMemberships (Rede). Mantendo listeners do cache.", e)
+            syncLog( "Falha no refreshMemberships (Rede). Mantendo listeners do cache.", e)
         }
     }
 
@@ -276,10 +329,10 @@ class OnlineSportsSyncManager @Inject constructor(
                         )
                     )
                 }
-                Log.d(TAG, "Liga $cloudLeagueId espelhada localmente com sucesso.")
+                syncLog( "Liga $cloudLeagueId espelhada localmente com sucesso.")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Falha ao espelhar liga $cloudLeagueId", e)
+            syncLog( "Falha ao espelhar liga $cloudLeagueId", e)
         }
     }
 
@@ -297,7 +350,7 @@ class OnlineSportsSyncManager @Inject constructor(
 
     private suspend fun pullAll(leagueId: String) {
         if (!syncEnabled(leagueId)) return
-        Log.d(TAG, "Iniciando pullAll para $leagueId")
+        syncLog( "Iniciando pullAll para $leagueId")
         TYPES.forEach { type ->
             try {
                 val snapshot = firestore.collection("leagues").document(leagueId)
@@ -316,7 +369,7 @@ class OnlineSportsSyncManager @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Falha no pullAll de $type para $leagueId", e)
+                syncLog( "Falha no pullAll de $type para $leagueId", e)
             }
         }
     }
@@ -335,7 +388,14 @@ class OnlineSportsSyncManager @Inject constructor(
     }
 
     private suspend fun scanAndFlush() {
-        if (authenticatedProfileUid == null || auth.currentUser?.uid != authenticatedProfileUid) return
+        if (authenticatedProfileUid == null) {
+            syncLog( "scanAndFlush abortado: authenticatedProfileUid é nulo.")
+            return
+        }
+        if (auth.currentUser?.uid != authenticatedProfileUid) {
+            syncLog( "scanAndFlush abortado: UID mismatch.")
+            return
+        }
         mutationMutex.withLock {
             latestCandidates.filter { syncEnabled(it.cloudLeagueId) }.forEach { candidate ->
                 val record = ensureRecord(candidate)
@@ -378,9 +438,19 @@ class OnlineSportsSyncManager @Inject constructor(
         ).also { syncDao.insertRecord(it) }
 
     private suspend fun flushQueue() {
-        val uid = auth.currentUser?.uid ?: return
-        if (uid != authenticatedProfileUid) return
-        if (!mutationMutex.tryLock()) return
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            syncLog( "flushQueue abortado: Usuário Firebase é nulo.")
+            return
+        }
+        if (uid != authenticatedProfileUid) {
+            syncLog( "flushQueue abortado: UID mismatch.")
+            return
+        }
+        if (!mutationMutex.tryLock()) {
+            syncLog( "flushQueue ignorado: Mutex ocupado.")
+            return
+        }
         try {
             syncDao.findPendingBatch().filter { syncEnabled(it.cloudLeagueId) }.forEach { operation -> upload(operation, uid) }
         } finally {
@@ -445,7 +515,7 @@ class OnlineSportsSyncManager @Inject constructor(
                 }
             }
         } catch (error: Exception) {
-            Log.e(TAG, "Falha no upload ${operation.entityType}/${operation.localId}", error)
+            syncLog( "Falha no upload ${operation.entityType}/${operation.localId}", error)
             // Firestore transactions fail offline. Keep the operation durable for the next snapshot/auth/network event.
             syncDao.updateQueue(
                 operation.copy(
@@ -455,7 +525,7 @@ class OnlineSportsSyncManager @Inject constructor(
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
-            Log.d(TAG, "Operação ${operation.operationId} mantida na fila", error)
+            syncLog( "Operação ${operation.operationId} mantida na fila", error)
         }
     }
 
@@ -661,17 +731,17 @@ class OnlineSportsSyncManager @Inject constructor(
                 firestore.collection("leagues").document(leagueId).collection(collectionFor(type))
                     .addSnapshotListener { snapshot, error ->
                         if (error != null) {
-                            Log.e(TAG, "ERRO NO LISTENER — tipo=$type liga=$leagueId erro=${error.message}", error)
+                            syncLog( "ERRO NO LISTENER — tipo=$type liga=$leagueId erro=${error.message}", error)
                             return@addSnapshotListener
                         }
                         if (snapshot?.metadata?.isFromCache == true || !syncEnabled(leagueId)) return@addSnapshotListener
                         
-                        Log.d(TAG, "SNAPSHOT recebido — tipo=$type liga=$leagueId totalDocumentos=${snapshot?.documentChanges?.size ?: 0} isFromCache=${snapshot?.metadata?.isFromCache}")
+                        syncLog( "SNAPSHOT recebido — tipo=$type liga=$leagueId totalDocumentos=${snapshot?.documentChanges?.size ?: 0} isFromCache=${snapshot?.metadata?.isFromCache}")
                         snapshot?.documentChanges?.forEach { change ->
                             if (!change.document.metadata.hasPendingWrites() && !change.document.metadata.isFromCache) {
                                 scope.launch { applyRemote(leagueId, type, change.document.id, change.document.data) }
                             } else {
-                                Log.d(TAG, "Documento IGNORADO (cache/pendingWrites) — tipo=$type id=${change.document.id}")
+                                syncLog( "Documento IGNORADO (cache/pendingWrites) — tipo=$type id=${change.document.id}")
                             }
                         }
                     }
@@ -756,16 +826,16 @@ class OnlineSportsSyncManager @Inject constructor(
                 // Instalação limpa: muitos registros chegam juntos, a dependência pode demorar mais para resolver.
                 if (retry < 40) {
                     val backoff = (200L * (retry + 1)).coerceAtMost(2000L)
-                    Log.d(TAG, "Dependência pendente para $type/$cloudId. Tentando novamente em ${backoff}ms... (retry $retry)")
+                    syncLog( "Dependência pendente para $type/$cloudId. Tentando novamente em ${backoff}ms... (retry $retry)")
                     scope.launch {
                         delay(backoff)
                         refreshSingleDocument(leagueId, type, cloudId, retry + 1)
                     }
                 } else {
-                    Log.e(TAG, "Dependência definitivamente ausente para $type/$cloudId após $retry tentativas. Registro descartado.")
+                    syncLog( "Dependência definitivamente ausente para $type/$cloudId após $retry tentativas. Registro descartado.")
                 }
             } catch (error: Exception) {
-                Log.e(TAG, "FALHA CRÍTICA ao aplicar $type/$cloudId na liga $leagueId — erro=${error.message}", error)
+                syncLog( "FALHA CRÍTICA ao aplicar $type/$cloudId na liga $leagueId — erro=${error.message}", error)
             }
         }
     }
@@ -976,7 +1046,7 @@ class OnlineSportsSyncManager @Inject constructor(
         val current = existingId?.let { playerDao.findById(it) }
             ?: playerDao.findByNameAndClub(clubId, name)
             
-        Log.d(TAG, "Sincronizando jogador: $name (Clube Local: $clubId, ID Externo: $externalId, Recuperado: ${current != null})")
+        syncLog( "Sincronizando jogador: $name (Clube Local: $clubId, ID Externo: $externalId, Recuperado: ${current != null})")
 
         val entity = com.example.legacymasterliga.core.database.entity.PlayerEntity(
             id = current?.id ?: 0,
@@ -1003,7 +1073,7 @@ class OnlineSportsSyncManager @Inject constructor(
             else -> playerDao.findByNameAndClub(clubId, name)?.id ?: throw IllegalStateException("Falha ao recuperar ID do jogador $name")
         }
         
-        Log.d(TAG, "Jogador $name salvo com sucesso. ID Local: $resultId")
+        syncLog( "Jogador $name salvo com sucesso. ID Local: $resultId")
         return resultId
     }
 
@@ -1209,7 +1279,7 @@ class OnlineSportsSyncManager @Inject constructor(
         "AUCTION_ITEM" -> "auction_items"
         "AUCTION_BID" -> "auction_bids"
         else -> {
-            Log.e(TAG, "Falha crítica: Tipo '$type' não mapeado em collectionFor")
+            syncLog( "Falha crítica: Tipo '$type' não mapeado em collectionFor")
             error("Tipo não sincronizável: $type")
         }
     }

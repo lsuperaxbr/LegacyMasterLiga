@@ -279,7 +279,10 @@ fun LegacyNavGraph(rootViewModel: RootViewModel = hiltViewModel()) {
             BackupRoute(onBack = navController::navigateUp)
         }
         composable(LegacyDestination.Settings.route) {
-            SettingsRoute(onBack = navController::navigateUp)
+            SettingsRoute(
+                onBack = navController::navigateUp,
+                onNavigateToDiagnostic = { navController.navigate(LegacyDestination.SyncDiagnostic.route) }
+            )
         }
         composable(LegacyDestination.LeagueSettings.route) {
             com.example.legacymasterliga.feature.league.presentation.LeagueSettingsRoute(onBack = navController::navigateUp)
@@ -311,6 +314,11 @@ fun LegacyNavGraph(rootViewModel: RootViewModel = hiltViewModel()) {
         }
         composable(LegacyDestination.PresidentProfile.route) {
             PresidentProfileRoute(onBack = navController::navigateUp)
+        }
+        composable(LegacyDestination.SyncDiagnostic.route) {
+            com.example.legacymasterliga.feature.online.sync.presentation.SyncDiagnosticScreen(
+                onBack = navController::navigateUp
+            )
         }
     }
 }

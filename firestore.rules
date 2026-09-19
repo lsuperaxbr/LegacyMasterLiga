@@ -14,6 +14,11 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
+    // Regra para permitir collectionGroup em 'members' para descoberta de ligas
+    match /{path=**}/members/{memberId} {
+      allow read, write: if signedIn();
+    }
+
     match /leagues/{leagueId} {
       allow read: if signedIn();
       allow write: if signedIn(); // Simplificado para RC1; controle via App Logic

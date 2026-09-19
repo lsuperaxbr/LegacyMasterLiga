@@ -117,6 +117,11 @@ class RoomFinanceRepository @Inject constructor(
 
             val now = System.currentTimeMillis()
             val seasonId = findActiveLeagueSeasonId(leagueId)
+
+            // Diagnóstico de Sync: Log de transferência
+            val league = database.leagueDao().findById(leagueId)
+            android.util.Log.d("OnlineSportsSync", "Registrando transferência local: $player na liga $leagueId (isOnline=${league?.isOnline}, cloudId=${league?.cloudLeagueId})")
+
             val transferId = transferDao.insert(
                 TransferEntity(
                     leagueId = leagueId,

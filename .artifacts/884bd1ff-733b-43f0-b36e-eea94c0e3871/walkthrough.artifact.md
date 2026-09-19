@@ -1,40 +1,36 @@
-# Walkthrough: CORREÇÃO DE ACESSO ADMIN + RECONSTRUÇÃO SOBERANA
+# Walkthrough: Resiliência de Sincronismo e Permissões Firestore
 
-Resolvemos o problema de login do administrador e consolidamos a reconstrução dos 8 elencos oficiais na liga soberana. Agora, o acesso administrativo foi restaurado com a senha padrão e a base de dados está perfeitamente limpa.
+Corrigimos a falha de sincronização causada por erros de permissão (`PERMISSION_DENIED`) no Firestore e tornamos o processo de descoberta de ligas mais resiliente.
 
 ## Mudanças Realizadas
 
-### 1. Restauração da Conta Admin
-- **Causa Raiz**: O "Reset Nuclear" anterior limpou todas as tabelas, incluindo a de usuários locais, o que removeu a conta `admin` do banco de dados do celular.
-- **Correção**: Atualizamos o `PlayerSeeder.kt` para chamar o inicializador de dados padrão (`bootstrap`) imediatamente após o reset. Isso garante que o usuário `admin` seja recriado com a senha de primeiro acesso (**admin123**).
+### [Configuração do Firebase]
 
-### 2. Liga Soberana Definitiva
-- **Nome Oficial**: O script agora renomeia automaticamente a liga inicial criada pelo sistema para **"LEGACY MASTER LIGA"**.
-- **Limpeza de Duplicatas**: Ao resetar o banco local e o perfil online, garantimos que não existam mais times ou ligas repetidas "assombrando" o aplicativo após o login.
+#### [firestore.rules](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/firestore.rules)
+- **Suporte a Collection Group**: Adicionada uma regra recursiva que permite consultas globais na coleção `members`. Isso é essencial para que o app descubra em quais ligas o usuário está inscrito sem precisar saber os IDs das ligas antecipadamente.
 
-### 3. Mega Carga Protegida
-- **8 Times**: Vasco, Athletico PR, Pisa, Chapecoense, St Pauli, RB Salzburg, LDU e Levante.
-- **226 Jogadores**: Todos os atletas transcritos dos prints foram inseridos na liga oficial, com nomes limpos e sem as siglas de posição.
+### [Componente de Sincronismo]
 
-## Verificação Técnica
+#### [OnlineSportsSyncManager.kt](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt)
+- **Isolamento de Erros**: A consulta de Scan Global (que disparava o erro de permissão) agora está isolada em seu próprio bloco `try-catch`.
+- **Resiliência**: Se o Scan Global falhar (por rede ou permissão), o app não interrompe mais o processo de sincronismo. Ele prossegue utilizando as ligas já confirmadas através do perfil do usuário, garantindo que o sincronismo funcione mesmo em cenários de erro parcial.
+- **Continuidade**: Após o refresh, o sistema dispara automaticamente o envio dos itens pendentes na fila.
 
-### Resultados de Build
-- [x] **Compilação**: `:app:assembleDebug` finalizado com **SUCESSO**.
-- [x] **Autenticação**: Lógica de recriação de conta admin validada via código.
-- [x] **Integridade**: Garantia de liga única no Dashboard.
+## Instruções de Publicação (Ação Necessária)
 
-### Detalhes do APK
-- **Caminho**: `app/build/outputs/apk/debug/app-debug.apk`
-- **Hash SHA-256**: `5C908965250C41048600D7E5CB84ADEB8DCA522AB4E5D2083CD5D1E40CA80C77`
+> [!IMPORTANT]
+> Você deve atualizar as regras no console do Firebase para que a correção tenha efeito completo:
+> 1. Abra o arquivo [firestore.rules](file:///C:/Users/luizh/Downloads/Telegram Desktop/LegacyMasterLiga/firestore.rules) no Android Studio.
+> 2. Copie todo o texto.
+> 3. Vá ao [Firebase Console](https://console.firebase.google.com/).
+> 4. Acesse **Firestore Database** > aba **Rules**.
+> 5. Cole o código e clique em **Publish**.
 
-## Roteiro de Teste (Importante!)
-1. Instale este novo APK.
-2. **Abra o app** e aguarde 10 segundos na tela inicial.
-3. No rodapé, aparecerá: **"RECONSTRUÇÃO LOCAL CONCLUÍDA: 226 atletas carregados!"**.
-4. Agora tente logar no modo **LOCAL** usando:
-    - **Usuário**: `admin`
-    - **Senha**: `admin123`
-5. **Sucesso!** O Dashboard abrirá com a conta de Administrador e a liga oficial pronta para uso.
+## Como Verificar a Correção
 
-> [!WARNING]
-> **Aviso de Segurança**: Por se tratar de um reset nuclear, você precisará fazer o login novamente após a carga inicial. A senha voltará a ser a padrão `admin123`.
+1. **Abra o Diagnóstico**: Vá em **Configurações** > **Diagnóstico de Sync**.
+2. **Observe os Logs**: O erro `PERMISSION_DENIED` não deve mais aparecer após a publicação das regras.
+3. **Teste de Envio**:
+   - Faça uma alteração financeira ou transferência.
+   - Volte ao Diagnóstico.
+   - A seção **"Fila PENDING"** deve esvaziar em poucos segundos, indicando sucesso no upload.

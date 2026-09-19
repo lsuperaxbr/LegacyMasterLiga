@@ -70,4 +70,5 @@ sealed interface LegacyDestination {
     data object Performance : LegacyDestination { override val route = "performance" }
     data object BetaTestGuide : LegacyDestination { override val route = "beta_test_guide" }
     data object PresidentProfile : LegacyDestination { override val route = "president_profile" }
+    data object SyncDiagnostic : LegacyDestination { override val route = "sync_diagnostic" }
 }

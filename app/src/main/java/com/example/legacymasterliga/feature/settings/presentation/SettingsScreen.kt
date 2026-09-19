@@ -44,6 +44,7 @@ import com.example.legacymasterliga.core.model.UserRole
 @Composable
 fun SettingsRoute(
     onBack: () -> Unit,
+    onNavigateToDiagnostic: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,6 +57,7 @@ fun SettingsRoute(
         onSavePreferences = viewModel::savePreferences,
         onSaveRules = viewModel::saveRules,
         onInjectBankBalance = viewModel::injectBankBalance,
+        onOpenSyncDiagnostic = onNavigateToDiagnostic
     )
 }
 
@@ -70,6 +72,7 @@ fun SettingsScreen(
     onSavePreferences: (ThemePreference, DensityPreference, Boolean) -> Unit,
     onSaveRules: (Int, Int, Int, Long, Long, List<TieBreakCriterion>, Boolean) -> Unit,
     onInjectBankBalance: (Long) -> Unit,
+    onOpenSyncDiagnostic: () -> Unit = {}
 ) {
     var leagueName by remember { mutableStateOf("") }
     var bankInjection by remember { mutableStateOf("") }
@@ -143,6 +146,19 @@ fun SettingsScreen(
                     enabled = state.selectedLeagueId != null
                 ) {
                     Text("Configurar Liga Online")
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                Text("Apoio técnico (Temporário)", style = MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick = onOpenSyncDiagnostic,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Text("Diagnóstico de Sync")
                 }
             }
 
