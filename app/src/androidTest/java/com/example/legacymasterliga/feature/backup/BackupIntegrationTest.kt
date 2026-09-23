@@ -51,9 +51,8 @@ class BackupIntegrationTest {
         crestStorage = CrestStorage(context)
         // Limpar pasta de escudos antes de cada teste
         crestStorage.getCrestsDirectory().listFiles()?.forEach { it.delete() }
-        
-        repository = RoomBackupRepository(context, db,
-            crestStorage, auditLogger)
+
+        repository = RoomBackupRepository(context, db, auditLogger)
         testBackupDir = File(context.filesDir, "backups")
         testBackupDir.listFiles()?.forEach { it.delete() }
     }

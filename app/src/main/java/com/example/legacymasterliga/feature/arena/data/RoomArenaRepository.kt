@@ -6,6 +6,7 @@ import com.example.legacymasterliga.core.database.dao.ArenaDao
 import com.example.legacymasterliga.core.database.dao.ArenaDuelRow
 import com.example.legacymasterliga.core.database.dao.ClubDao
 import com.example.legacymasterliga.core.database.dao.FinancialDao
+import com.example.legacymasterliga.core.database.dao.OnlineSyncDao
 import com.example.legacymasterliga.core.database.entity.ArenaDuelEntity
 import com.example.legacymasterliga.core.database.entity.FinancialTransactionEntity
 import com.example.legacymasterliga.feature.arena.domain.ArenaRepository
@@ -19,6 +20,7 @@ class RoomArenaRepository @Inject constructor(
     private val arenaDao: ArenaDao,
     private val clubDao: ClubDao,
     private val financialDao: FinancialDao,
+    private val onlineSyncDao: OnlineSyncDao,
 ) : ArenaRepository {
 
     override fun observeByLeague(leagueId: Long): Flow<List<ArenaDuelRow>> =
@@ -54,12 +56,24 @@ class RoomArenaRepository @Inject constructor(
             require(duel.status == "PENDING") { "Este duelo já foi resolvido." }
             val now = System.currentTimeMillis()
             val prize = duel.stakeCr * 2
+
+            // Idempotência: Busca o cloudId do duelo para gerar chaves determinísticas
+            val duelCloudId = onlineSyncDao.findRecord("ARENA", duelId)?.cloudId
+
             when (resultType) {
-                "CLUB_A_WIN" -> financialDao.insert(FinancialTransactionEntity(clubId = duel.clubAId, amountCr = prize, description = "Arena: vitória (+${prize} CR)", type = "ARENA", counterpartyClubId = duel.clubBId, createdAt = now))
-                "CLUB_B_WIN" -> financialDao.insert(FinancialTransactionEntity(clubId = duel.clubBId, amountCr = prize, description = "Arena: vitória (+${prize} CR)", type = "ARENA", counterpartyClubId = duel.clubAId, createdAt = now))
+                "CLUB_A_WIN" -> {
+                    val key = duelCloudId?.let { "arena_${it}_prize" }
+                    financialDao.insert(FinancialTransactionEntity(clubId = duel.clubAId, amountCr = prize, description = "Arena: vitória (+${prize} CR)", type = "ARENA", counterpartyClubId = duel.clubBId, idempotencyKey = key, createdAt = now))
+                }
+                "CLUB_B_WIN" -> {
+                    val key = duelCloudId?.let { "arena_${it}_prize" }
+                    financialDao.insert(FinancialTransactionEntity(clubId = duel.clubBId, amountCr = prize, description = "Arena: vitória (+${prize} CR)", type = "ARENA", counterpartyClubId = duel.clubAId, idempotencyKey = key, createdAt = now))
+                }
                 "DRAW" -> {
-                    financialDao.insert(FinancialTransactionEntity(clubId = duel.clubAId, amountCr = duel.stakeCr, description = "Arena: empate (devolução)", type = "ARENA", counterpartyClubId = duel.clubBId, createdAt = now))
-                    financialDao.insert(FinancialTransactionEntity(clubId = duel.clubBId, amountCr = duel.stakeCr, description = "Arena: empate (devolução)", type = "ARENA", counterpartyClubId = duel.clubAId, createdAt = now))
+                    val keyA = duelCloudId?.let { "arena_${it}_refund_a" }
+                    val keyB = duelCloudId?.let { "arena_${it}_refund_b" }
+                    financialDao.insert(FinancialTransactionEntity(clubId = duel.clubAId, amountCr = duel.stakeCr, description = "Arena: empate (devolução)", type = "ARENA", counterpartyClubId = duel.clubBId, idempotencyKey = keyA, createdAt = now))
+                    financialDao.insert(FinancialTransactionEntity(clubId = duel.clubBId, amountCr = duel.stakeCr, description = "Arena: empate (devolução)", type = "ARENA", counterpartyClubId = duel.clubAId, idempotencyKey = keyB, createdAt = now))
                 }
             }
             arenaDao.resolve(duelId, "RESOLVED", resultType, now)

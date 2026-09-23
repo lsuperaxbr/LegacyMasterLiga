@@ -9,77 +9,135 @@ import com.example.legacymasterliga.core.database.entity.OnlineSyncQueueEntity
 import com.example.legacymasterliga.core.database.entity.OnlineSyncRecordEntity
 import com.example.legacymasterliga.core.database.model.OnlineSyncCandidate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 @Dao
 interface OnlineSyncDao {
-    @Query(
-        """
+
+    @Query("""
         SELECT 'COMPETITION' AS entityType, c.id AS localId, l.cloudLeagueId AS cloudLeagueId, c.updatedAt AS updatedAt
         FROM competitions c JOIN leagues l ON l.id = c.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'CLUB', cl.id, l.cloudLeagueId, cl.updatedAt
+    """)
+    fun observeCompetitionCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'CLUB' AS entityType, cl.id AS localId, l.cloudLeagueId AS cloudLeagueId, cl.updatedAt AS updatedAt
         FROM clubs cl JOIN leagues l ON l.id = cl.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'SEASON', s.id, l.cloudLeagueId, s.updatedAt
+    """)
+    fun observeClubCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'SEASON' AS entityType, s.id AS localId, l.cloudLeagueId AS cloudLeagueId, s.updatedAt AS updatedAt
         FROM seasons s JOIN competitions c ON c.id = s.competitionId JOIN leagues l ON l.id = c.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'PARTICIPANT', p.id, l.cloudLeagueId, p.createdAt
+    """)
+    fun observeSeasonCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'PARTICIPANT' AS entityType, p.id AS localId, l.cloudLeagueId AS cloudLeagueId, p.createdAt AS updatedAt
         FROM competition_participants p JOIN seasons s ON s.id = p.seasonId JOIN competitions c ON c.id = s.competitionId JOIN leagues l ON l.id = c.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'ROUND', r.id, l.cloudLeagueId, r.updatedAt
+    """)
+    fun observeParticipantCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'ROUND' AS entityType, r.id AS localId, l.cloudLeagueId AS cloudLeagueId, r.updatedAt AS updatedAt
         FROM rounds r JOIN seasons s ON s.id = r.seasonId JOIN competitions c ON c.id = s.competitionId JOIN leagues l ON l.id = c.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'MATCH', m.id, l.cloudLeagueId, m.updatedAt
+    """)
+    fun observeRoundCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'MATCH' AS entityType, m.id AS localId, l.cloudLeagueId AS cloudLeagueId, m.updatedAt AS updatedAt
         FROM matches m JOIN seasons s ON s.id = m.seasonId JOIN competitions c ON c.id = s.competitionId JOIN leagues l ON l.id = c.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'FINANCE', ft.id, l.cloudLeagueId, ft.createdAt
+    """)
+    fun observeMatchCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'FINANCE' AS entityType, ft.id AS localId, l.cloudLeagueId AS cloudLeagueId, ft.createdAt AS updatedAt
         FROM financial_transactions ft JOIN clubs cl ON cl.id = ft.clubId JOIN leagues l ON l.id = cl.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'TRANSFER', t.id, l.cloudLeagueId, t.createdAt
+    """)
+    fun observeFinanceCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'TRANSFER' AS entityType, t.id AS localId, l.cloudLeagueId AS cloudLeagueId, t.createdAt AS updatedAt
         FROM transfers t JOIN leagues l ON l.id = t.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'PLAYER', p.id, l.cloudLeagueId, p.updatedAt
+    """)
+    fun observeTransferCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'PLAYER' AS entityType, p.id AS localId, l.cloudLeagueId AS cloudLeagueId, p.updatedAt AS updatedAt
         FROM players p JOIN leagues l ON l.id = p.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'NEWS', n.id, l.cloudLeagueId, n.publishedAt
+    """)
+    fun observePlayerCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'NEWS' AS entityType, n.id AS localId, l.cloudLeagueId AS cloudLeagueId, n.publishedAt AS updatedAt
         FROM news n JOIN leagues l ON l.id = n.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'ARENA', d.id, l.cloudLeagueId, d.createdAt
+    """)
+    fun observeNewsCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'ARENA' AS entityType, d.id AS localId, l.cloudLeagueId AS cloudLeagueId, d.createdAt AS updatedAt
         FROM arena_duels d JOIN leagues l ON l.id = d.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'GOAL_EVENT', g.id, l.cloudLeagueId, g.createdAt
+    """)
+    fun observeArenaCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'GOAL_EVENT' AS entityType, g.id AS localId, l.cloudLeagueId AS cloudLeagueId, g.createdAt AS updatedAt
         FROM goal_events g JOIN matches m ON m.id = g.matchId JOIN seasons s ON s.id = m.seasonId JOIN competitions c ON c.id = s.competitionId JOIN leagues l ON l.id = c.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'AUCTION_LOT', al.id, l.cloudLeagueId, al.createdAt
+    """)
+    fun observeGoalEventCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'AUCTION_LOT' AS entityType, al.id AS localId, l.cloudLeagueId AS cloudLeagueId, al.createdAt AS updatedAt
         FROM auction_lots al JOIN leagues l ON l.id = al.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'AUCTION_ITEM', ai.id, l.cloudLeagueId, ai.createdAt
+    """)
+    fun observeAuctionLotCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'AUCTION_ITEM' AS entityType, ai.id AS localId, l.cloudLeagueId AS cloudLeagueId, ai.createdAt AS updatedAt
         FROM auction_items ai JOIN auction_lots al ON al.id = ai.lotId JOIN leagues l ON l.id = al.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'AUCTION_BID', ab.id, l.cloudLeagueId, ab.createdAt
+    """)
+    fun observeAuctionItemCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'AUCTION_BID' AS entityType, ab.id AS localId, l.cloudLeagueId AS cloudLeagueId, ab.createdAt AS updatedAt
         FROM auction_bids ab JOIN auction_items ai ON ai.id = ab.itemId JOIN auction_lots al ON al.id = ai.lotId JOIN leagues l ON l.id = al.leagueId
         WHERE l.isOnline = 1 AND l.cloudLeagueId IS NOT NULL
-        UNION ALL
-        SELECT 'USER', u.id, 'GLOBAL', u.updatedAt
+    """)
+    fun observeAuctionBidCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    @Query("""
+        SELECT 'USER' AS entityType, u.id AS localId, 'GLOBAL' AS cloudLeagueId, u.updatedAt AS updatedAt
         FROM users u
         WHERE u.firebaseUid IS NOT NULL
-        """,
-    )
-    fun observeCandidates(): Flow<List<OnlineSyncCandidate>>
+    """)
+    fun observeUserCandidates(): Flow<List<OnlineSyncCandidate>>
+
+    /**
+     * Performance optimization: Instead of a single giant UNION ALL query that re-runs whenever
+     * any of the 16 tables change, we observe each table independently and combine the results.
+     */
+    fun observeCandidates(): Flow<List<OnlineSyncCandidate>> = combine(
+        observeCompetitionCandidates(), observeClubCandidates(), observeSeasonCandidates(),
+        observeParticipantCandidates(), observeRoundCandidates(), observeMatchCandidates(),
+        observeFinanceCandidates(), observeTransferCandidates(), observePlayerCandidates(),
+        observeNewsCandidates(), observeArenaCandidates(), observeGoalEventCandidates(),
+        observeAuctionLotCandidates(), observeAuctionItemCandidates(), observeAuctionBidCandidates(),
+        observeUserCandidates(),
+    ) { arrays -> arrays.toList().flatten() }
 
     @Query("SELECT * FROM online_sync_records WHERE entityType = :type AND localId = :localId LIMIT 1")
     suspend fun findRecord(type: String, localId: Long): OnlineSyncRecordEntity?

@@ -27,5 +27,6 @@ data class FinancialTransactionEntity(
     @ColumnInfo(defaultValue = "'ADJUSTMENT'") val type: String = "ADJUSTMENT",
     val counterpartyClubId: Long? = null,
     val transferId: Long? = null,
+    val idempotencyKey: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )

@@ -31,4 +31,28 @@ class OnlineConflictPolicyTest {
             OnlineConflictPolicy.decide("SEASON", 1, 2, emptyMap(), emptyMap()),
         )
     }
+
+    @Test
+    fun `arena resolving pending duel uploads even with revision mismatch`() {
+        assertEquals(
+            OnlineConflictDecision.UPLOAD,
+            OnlineConflictPolicy.decide(
+                "ARENA", 1, 2,
+                mapOf("status" to "RESOLVED", "resultType" to "CLUB_A_WIN"),
+                mapOf("status" to "PENDING")
+            ),
+        )
+    }
+
+    @Test
+    fun `arena already resolved on remote prefers remote`() {
+        assertEquals(
+            OnlineConflictDecision.REMOTE_WINS,
+            OnlineConflictPolicy.decide(
+                "ARENA", 1, 2,
+                mapOf("status" to "RESOLVED", "resultType" to "CLUB_A_WIN"),
+                mapOf("status" to "RESOLVED", "resultType" to "CLUB_B_WIN")
+            ),
+        )
+    }
 }

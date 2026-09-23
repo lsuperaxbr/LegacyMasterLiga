@@ -1,0 +1,4 @@
+- `[x]` Corrigir `syncLog()` em `OnlineSportsSyncManager.kt`
+- `[x]` Proteger `getDiagnosticInfo()` em `OnlineSportsSyncManager.kt`
+- `[x]` Clean e Rebuild do projeto
+- `[x]` Verificar compilação

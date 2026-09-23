@@ -109,9 +109,7 @@ fun ArenaScreen(
                 items(state.duels, key = { it.id }) { duel ->
                     DuelCard(
                         duel = duel,
-                        canResolve = state.currentUserRole == UserRole.ADMINISTRATOR || 
-                                     state.ownClubIds.contains(duel.clubAId) || 
-                                     state.ownClubIds.contains(duel.clubBId),
+                        canResolve = state.currentUserRole == UserRole.ADMINISTRATOR,
                         onResolve = { type -> onResolveDuel(duel.id, type) }
                     )
                 }

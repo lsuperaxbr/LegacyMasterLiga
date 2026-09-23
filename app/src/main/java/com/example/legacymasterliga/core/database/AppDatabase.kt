@@ -61,7 +61,7 @@ import com.example.legacymasterliga.core.database.entity.GoalEventEntity
 
 /** Single source of truth for the on-device database contract. */
 object DatabaseContract {
-    const val VERSION = 28
+    const val VERSION = 29
     const val NAME = "legacy_master_liga.db"
     const val OLDEST_SUPPORTED_VERSION = 1
 }

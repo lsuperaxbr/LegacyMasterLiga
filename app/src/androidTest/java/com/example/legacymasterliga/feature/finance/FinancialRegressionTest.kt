@@ -12,6 +12,7 @@ import com.example.legacymasterliga.feature.audit.domain.AuditLogger
 import com.example.legacymasterliga.feature.closure.data.RoomSeasonClosureRepository
 import com.example.legacymasterliga.feature.closure.domain.CloseSeasonRequest
 import com.example.legacymasterliga.feature.finance.data.RoomFinanceRepository
+import com.example.legacymasterliga.data.repository.RoomPlayerRepository
 import com.example.legacymasterliga.feature.news.domain.NewsEvent
 import com.example.legacymasterliga.feature.news.domain.NewsEventPublisher
 import kotlinx.coroutines.flow.first
@@ -56,8 +57,12 @@ class FinancialRegressionTest {
             database.clubDao(),
             database.financialDao(),
             database.transferDao(),
+            database.playerDao(),
+            RoomPlayerRepository(database.playerDao()),
             newsPublisher,
-            auditLogger
+            auditLogger,
+            database.competitionDao(),
+            database.seasonDao()
         )
 
         closureRepository = RoomSeasonClosureRepository(
@@ -190,7 +195,16 @@ class FinancialRegressionTest {
         }
 
         val failingRepo = RoomFinanceRepository(
-            database, database.clubDao(), failingFinancialDao, database.transferDao(), newsPublisher, auditLogger
+            database,
+            database.clubDao(),
+            failingFinancialDao,
+            database.transferDao(),
+            database.playerDao(),
+            RoomPlayerRepository(database.playerDao()),
+            newsPublisher,
+            auditLogger,
+            database.competitionDao(),
+            database.seasonDao()
         )
 
         runCatching { failingRepo.adjustBalance(adminUser, clubAId, 100L, "Rollback Force") }

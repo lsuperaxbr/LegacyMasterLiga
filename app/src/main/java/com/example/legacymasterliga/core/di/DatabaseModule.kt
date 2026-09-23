@@ -695,6 +695,12 @@ object DatabaseModule {
         }
     }
 
+    private val migration28To29 = object : Migration(28, 29) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE financial_transactions ADD COLUMN idempotencyKey TEXT")
+        }
+    }
+
     /** Complete, ordered migration chain. Keep new migrations appended and covered by tests. */
     val migrations: Array<Migration> = arrayOf(
         migration1To2,
@@ -724,6 +730,7 @@ object DatabaseModule {
         migration25To26,
         migration26To27,
         migration27To28,
+        migration28To29,
     )
 
     @Provides

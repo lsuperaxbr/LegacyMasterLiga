@@ -99,14 +99,18 @@ class OnlineSportsSyncManager @Inject constructor(
         if (error != null) Log.d(TAG, msg, error) else Log.d(TAG, msg)
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         val suffix = error?.let { " | Erro: ${it.message}" } ?: ""
-        logBuffer.add(0, "[$timestamp] $msg$suffix")
-        if (logBuffer.size > 20) logBuffer.removeAt(logBuffer.size - 1)
+        synchronized(logBuffer) {
+            logBuffer.add(0, "[$timestamp] $msg$suffix")
+            while (logBuffer.size > 20) {
+                logBuffer.removeAt(logBuffer.size - 1)
+            }
+        }
     }
 
     fun getDiagnosticInfo() = mapOf(
         "uid" to (authenticatedProfileUid ?: "Nulo"),
         "memberships" to activeMembershipRoles.map { "${it.key}|${it.value}" },
-        "logs" to logBuffer.toList()
+        "logs" to synchronized(logBuffer) { logBuffer.toList() }
     )
 
     private val activeMembershipLeagueIds: Set<String>
@@ -417,11 +421,21 @@ class OnlineSportsSyncManager @Inject constructor(
 
     private suspend fun ensureRecord(candidate: OnlineSyncCandidate): OnlineSyncRecordEntity {
         syncDao.findRecord(candidate.entityType, candidate.localId)?.let { return it }
+
+        var cloudId = UUID.randomUUID().toString()
+
+        // Idempotência: Para transações financeiras, usamos a chave determinística se existir
+        if (candidate.entityType == "FINANCE") {
+            financialDao.findById(candidate.localId)?.idempotencyKey?.let { key ->
+                cloudId = key
+            }
+        }
+
         val created = OnlineSyncRecordEntity(
             entityType = candidate.entityType,
             localId = candidate.localId,
             cloudLeagueId = candidate.cloudLeagueId,
-            cloudId = UUID.randomUUID().toString(),
+            cloudId = cloudId,
             status = "PENDING",
         )
         syncDao.insertRecord(created)
@@ -447,14 +461,8 @@ class OnlineSportsSyncManager @Inject constructor(
             syncLog( "flushQueue abortado: UID mismatch.")
             return
         }
-        if (!mutationMutex.tryLock()) {
-            syncLog( "flushQueue ignorado: Mutex ocupado.")
-            return
-        }
-        try {
+        mutationMutex.withLock {
             syncDao.findPendingBatch().filter { syncEnabled(it.cloudLeagueId) }.forEach { operation -> upload(operation, uid) }
-        } finally {
-            mutationMutex.unlock()
         }
     }
 
