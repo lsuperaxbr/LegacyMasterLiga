@@ -17,6 +17,9 @@ interface ClubPresidencyDao {
     @Query("SELECT * FROM club_presidencies WHERE clubId = :clubId AND endAt IS NULL LIMIT 1")
     suspend fun findOpenByClub(clubId: Long): ClubPresidencyEntity?
 
+    @Query("SELECT * FROM club_presidencies WHERE userId = :userId AND endAt IS NULL")
+    suspend fun findOpenByUser(userId: Long): List<ClubPresidencyEntity>
+
     @Query("""
         SELECT * FROM club_presidencies 
         WHERE clubId = :clubId AND startAt <= :atTime AND (endAt IS NULL OR endAt >= :atTime)

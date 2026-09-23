@@ -222,6 +222,10 @@ class OnlineSportsSyncManager @Inject constructor(
             syncLog( "Sync ignorado: leagueId está em branco.")
             return false
         }
+        if (leagueId == "GLOBAL") {
+            syncLog( "Sync de usuário — não requer membership de liga.")
+            return false
+        }
         if (leagueId !in activeMembershipLeagueIds) {
             syncLog( "Sync ignorado: Liga $leagueId não encontrada nas memberships ativas ($activeMembershipLeagueIds).")
             return false
@@ -876,10 +880,20 @@ class OnlineSportsSyncManager @Inject constructor(
         val current = existingId?.let { clubDao.findById(it) }
             ?: clubDao.findByLeagueAndName(leagueId, d.string("name"))
 
-        val presidentUid = d["presidentFirebaseUid"] as? String
-        val presidentUserId = presidentUid?.let { uid ->
-            // Prioridade: buscar pelo UID do Firebase
-            userDao.findByFirebaseUid(uid)?.id ?: throw DependencyPendingException()
+        val presidentUid = (d["presidentFirebaseUid"] as? String)?.trim()?.ifBlank { null }
+        val presidentUserId: Long? = if (presidentUid != null) {
+            val foundUser = userDao.findByFirebaseUid(presidentUid)
+            if (foundUser != null) {
+                foundUser.id
+            } else {
+                syncLog("presidente remoto não resolvido — preservado local (clube id=${current?.id ?: existingId ?: "novo"})")
+                current?.presidentUserId
+            }
+        } else {
+            if (current?.presidentUserId != null) {
+                syncLog("presidente remoto não resolvido — preservado local (clube id=${current.id})")
+            }
+            current?.presidentUserId
         }
 
         val entity = ClubEntity(

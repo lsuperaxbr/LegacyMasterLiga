@@ -146,9 +146,34 @@ class RoomClubRepository @Inject constructor(
 
     override suspend fun assignPresident(userId: Long, clubId: Long?) = database.withTransaction {
         val now = System.currentTimeMillis()
+
+        // Fechar períodos abertos anteriores do usuário
+        clubPresidencyDao.findOpenByUser(userId).forEach { open ->
+            clubPresidencyDao.update(open.copy(endAt = now))
+        }
+
         clubDao.clearPresidentAssignments(userId, now)
+
         if (clubId != null) {
+            // Fechar período aberto anterior do clube (se pertencia a outro presidente)
+            clubPresidencyDao.findOpenByClub(clubId)?.let { open ->
+                if (open.userId != userId) {
+                    clubPresidencyDao.update(open.copy(endAt = now))
+                }
+            }
+
             check(clubDao.assignPresident(clubId, userId, now) == 1) { "Clube não encontrado." }
+
+            // Abrir novo período de presidência
+            clubPresidencyDao.insert(
+                ClubPresidencyEntity(
+                    clubId = clubId,
+                    userId = userId,
+                    startAt = now,
+                    endAt = null,
+                ),
+            )
+
             val club = clubDao.findById(clubId)
             auditLogger.log("CLUBS", "PRESIDENT_ASSIGNED", "CLUB", clubId, club?.leagueId, "Usuário $userId assumiu o clube ${club?.name}", null)
         } else {
