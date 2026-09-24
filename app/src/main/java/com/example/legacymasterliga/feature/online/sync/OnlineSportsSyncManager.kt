@@ -95,7 +95,11 @@ class OnlineSportsSyncManager @Inject constructor(
     @Volatile private var activeMembershipRoles: Map<String, String> = emptyMap()
     private val logBuffer = java.util.Collections.synchronizedList(mutableListOf<String>())
 
+    private val consecutiveNetworkFailures = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var lastNetworkFailureTime: Long = 0L
+
     private fun syncLog(msg: String, error: Throwable? = null) {
+        if (error is kotlinx.coroutines.CancellationException) return
         if (error != null) Log.d(TAG, msg, error) else Log.d(TAG, msg)
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         val suffix = error?.let { " | Erro: ${it.message}" } ?: ""
@@ -175,7 +179,13 @@ class OnlineSportsSyncManager @Inject constructor(
             }
 
             scope.launch {
-                leagueDao.observeOnline().collectLatest {
+                var previousLeaguesSet: Set<com.example.legacymasterliga.core.database.entity.LeagueEntity>? = null
+                leagueDao.observeOnline().collectLatest { leagues ->
+                    val currentSet = leagues.toSet()
+                    if (previousLeaguesSet != null && previousLeaguesSet == currentSet) {
+                        return@collectLatest
+                    }
+                    previousLeaguesSet = currentSet
                     syncLog( "Mudança observada em ligas locais. Atualizando memberships...")
                     refreshMemberships()
                 }
@@ -236,6 +246,26 @@ class OnlineSportsSyncManager @Inject constructor(
     private suspend fun refreshMemberships() {
         val uid = authenticatedProfileUid ?: return
         if (auth.currentUser?.uid != uid) return
+
+        val failures = consecutiveNetworkFailures.get()
+        val now = System.currentTimeMillis()
+
+        if (failures >= 5) {
+            val timeSinceFailure = now - lastNetworkFailureTime
+            if (timeSinceFailure < 60_000L) {
+                val remainingSecs = (60_000L - timeSinceFailure) / 1000L
+                syncLog("Pausa de resguardo ativa ($failures falhas consecutivas de rede/quota). Próxima tentativa em ${remainingSecs}s.")
+                return
+            }
+        } else if (failures > 0) {
+            val backoffMs = (1000L * (1 shl (failures - 1))).coerceAtMost(30000L)
+            val timeSinceFailure = now - lastNetworkFailureTime
+            if (timeSinceFailure < backoffMs) {
+                val waitMs = backoffMs - timeSinceFailure
+                syncLog("Backoff de rede ativo (tentativa $failures). Aguardando ${waitMs}ms...")
+                delay(waitMs)
+            }
+        }
         
         syncLog( "Validando memberships com o servidor para $uid")
 
@@ -262,6 +292,7 @@ class OnlineSportsSyncManager @Inject constructor(
                         if (leagueId !in activeMembershipLeagueIds) leaguesToPull += leagueId
                     }
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     syncLog( "Falha ao verificar liga $leagueId do perfil", e)
                 }
             }
@@ -282,6 +313,7 @@ class OnlineSportsSyncManager @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 syncLog("Falha no Scan Global de memberships. Prosseguindo com ligas do perfil.", e)
             }
 
@@ -297,10 +329,14 @@ class OnlineSportsSyncManager @Inject constructor(
             // Carga inicial para novas ligas detectadas
             leaguesToPull.forEach { leagueId -> scope.launch { pullAll(leagueId) } }
             
+            consecutiveNetworkFailures.set(0)
             syncLog( "RefreshMemberships concluído. Disparando scanAndFlush.")
             scanAndFlush()
         } catch (e: Exception) {
-            syncLog( "Falha no refreshMemberships (Rede). Mantendo listeners do cache.", e)
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            val failureCount = consecutiveNetworkFailures.incrementAndGet()
+            lastNetworkFailureTime = System.currentTimeMillis()
+            syncLog( "Falha no refreshMemberships (Rede - tentativa $failureCount). Mantendo listeners do cache.", e)
         }
     }
 
@@ -318,16 +354,22 @@ class OnlineSportsSyncManager @Inject constructor(
     }
 
     private suspend fun ensureLocalLeagueMirror(cloudLeagueId: String) {
-        if (leagueDao.findByCloudId(cloudLeagueId) != null) return
-        
+        val existingByCloudId = leagueDao.findByCloudId(cloudLeagueId)
+        if (existingByCloudId != null && existingByCloudId.isOnline) {
+            return
+        }
+
         try {
             val leagueDoc = firestore.collection("leagues").document(cloudLeagueId).get().await()
             if (leagueDoc.exists()) {
                 val name = leagueDoc.getString("name") ?: "Liga Online"
                 val existingLocal = leagueDao.findByName(name)
-                
+
                 if (existingLocal != null) {
-                    leagueDao.linkCloudId(existingLocal.id, cloudLeagueId)
+                    if (existingLocal.cloudLeagueId != cloudLeagueId || !existingLocal.isOnline) {
+                        leagueDao.linkCloudId(existingLocal.id, cloudLeagueId)
+                        syncLog( "Liga $cloudLeagueId vinculada localmente com sucesso.")
+                    }
                 } else {
                     leagueDao.insert(
                         com.example.legacymasterliga.core.database.entity.LeagueEntity(
@@ -336,10 +378,11 @@ class OnlineSportsSyncManager @Inject constructor(
                             isOnline = true
                         )
                     )
+                    syncLog( "Liga $cloudLeagueId espelhada localmente com sucesso.")
                 }
-                syncLog( "Liga $cloudLeagueId espelhada localmente com sucesso.")
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             syncLog( "Falha ao espelhar liga $cloudLeagueId", e)
         }
     }
@@ -367,7 +410,7 @@ class OnlineSportsSyncManager @Inject constructor(
                     val data = doc.data
                     if (data != null) applyRemote(leagueId, type, doc.id, data)
                 }
-                
+
                 // PERFORMANCE-001: Recalcula a tabela apenas uma vez por categoria de dados baixada
                 if (type == "PARTICIPANT" || type == "MATCH" || type == "STANDING") {
                     database.query("SELECT id FROM seasons WHERE competitionId IN (SELECT id FROM competitions WHERE leagueId = (SELECT id FROM leagues WHERE cloudLeagueId = ?))", arrayOf(leagueId)).use { cursor ->
@@ -377,6 +420,7 @@ class OnlineSportsSyncManager @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 syncLog( "Falha no pullAll de $type para $leagueId", e)
             }
         }
@@ -527,6 +571,7 @@ class OnlineSportsSyncManager @Inject constructor(
                 }
             }
         } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
             syncLog( "Falha no upload ${operation.entityType}/${operation.localId}", error)
             // Firestore transactions fail offline. Keep the operation durable for the next snapshot/auth/network event.
             syncDao.updateQueue(
@@ -849,6 +894,7 @@ class OnlineSportsSyncManager @Inject constructor(
                     syncLog( "Dependência definitivamente ausente para $type/$cloudId após $retry tentativas. Registro descartado.")
                 }
             } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 syncLog( "FALHA CRÍTICA ao aplicar $type/$cloudId na liga $leagueId — erro=${error.message}", error)
             }
         }
