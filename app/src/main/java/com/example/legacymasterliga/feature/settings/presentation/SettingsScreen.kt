@@ -12,7 +12,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -24,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +60,7 @@ fun SettingsRoute(
         onSavePreferences = viewModel::savePreferences,
         onSaveRules = viewModel::saveRules,
         onInjectBankBalance = viewModel::injectBankBalance,
+        onResetLeague = viewModel::resetLeague,
         onOpenSyncDiagnostic = onNavigateToDiagnostic
     )
 }
@@ -72,6 +76,7 @@ fun SettingsScreen(
     onSavePreferences: (ThemePreference, DensityPreference, Boolean) -> Unit,
     onSaveRules: (Int, Int, Int, Long, Long, List<TieBreakCriterion>, Boolean) -> Unit,
     onInjectBankBalance: (Long) -> Unit,
+    onResetLeague: () -> Unit = {},
     onOpenSyncDiagnostic: () -> Unit = {}
 ) {
     var leagueName by remember { mutableStateOf("") }
@@ -88,6 +93,8 @@ fun SettingsScreen(
     var highlightLeader by remember { mutableStateOf(true) }
     var showOnlineDialog by remember { mutableStateOf(false) }
     var showCloudDialog by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
+    var resetConfirmInput by remember { mutableStateOf("") }
 
     val selectedLeague = state.leagues.firstOrNull { it.id == state.selectedLeagueId }
     LaunchedEffect(selectedLeague?.id, selectedLeague?.name) { leagueName = selectedLeague?.name.orEmpty() }
@@ -106,6 +113,58 @@ fun SettingsScreen(
             criteria = it.tieBreakCriteria
             highlightLeader = it.highlightLeader
         }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showResetDialog = false
+                resetConfirmInput = ""
+            },
+            title = { Text("Zona de Perigo — Reset da Liga") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Atenção: Esta ação moverá todos os jogadores para o Banco da Liga, zerará os elencos, apagará todas as partidas/temporadas/tabelas e restaurará o saldo dos clubes para 500 CR.\n\n" +
+                        "Um backup de segurança do estado atual do app será gerado automaticamente antes do reset.\n\n" +
+                        "Digite 'RESET' abaixo para confirmar:",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedTextField(
+                        value = resetConfirmInput,
+                        onValueChange = { resetConfirmInput = it },
+                        label = { Text("Digite RESET para confirmar") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetDialog = false
+                        resetConfirmInput = ""
+                        onResetLeague()
+                    },
+                    enabled = resetConfirmInput.trim() == "RESET",
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Executar Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showResetDialog = false
+                        resetConfirmInput = ""
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -154,7 +213,7 @@ fun SettingsScreen(
                 Button(
                     onClick = onOpenSyncDiagnostic,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.tertiary
                     )
                 ) {
@@ -281,6 +340,20 @@ fun SettingsScreen(
                                 )
                             },
                         ) { Text("Salvar regras") }
+                    }
+                }
+
+                SettingsCard("Zona de Perigo") {
+                    Text("Reset de Temporada/Liga", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text("Zera temporadas, partidas e histórico, movendo jogadores para o Banco da Liga. Preserva clubes, escudos, presidentes e usuários.", style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = { showResetDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Resetar Liga")
                     }
                 }
             }

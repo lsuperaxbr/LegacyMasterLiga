@@ -8,6 +8,8 @@ import com.example.legacymasterliga.core.model.TieBreakCriterion
 import com.example.legacymasterliga.domain.model.League
 import com.example.legacymasterliga.domain.model.User
 import com.example.legacymasterliga.domain.repository.AuthRepository
+import com.example.legacymasterliga.domain.usecase.ResetLeagueResult
+import com.example.legacymasterliga.domain.usecase.ResetLeagueUseCase
 import com.example.legacymasterliga.feature.settings.domain.AppPreferences
 import com.example.legacymasterliga.feature.settings.domain.CompetitionOption
 import com.example.legacymasterliga.feature.settings.domain.CompetitionRules
@@ -39,6 +41,7 @@ class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val authRepository: AuthRepository,
     private val financeRepository: FinanceRepository,
+    private val resetLeagueUseCase: ResetLeagueUseCase,
 ) : ViewModel() {
     private val selectedLeagueId = MutableStateFlow<Long?>(null)
     private val selectedCompetitionId = MutableStateFlow<Long?>(null)
@@ -110,6 +113,22 @@ class SettingsViewModel @Inject constructor(
     fun injectBankBalance(amount: Long) = launchAction("Saldo do Banco da Liga injetado com sucesso.") {
         val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id ?: error("Nenhuma liga selecionada.")
         financeRepository.injectInitialBalance(leagueId, amount)
+    }
+
+    fun resetLeague() = viewModelScope.launch {
+        val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id
+        if (leagueId == null) {
+            message.value = "Nenhuma liga selecionada."
+            return@launch
+        }
+        when (val result = resetLeagueUseCase(leagueId)) {
+            is ResetLeagueResult.Success -> {
+                message.value = "Reset da Liga executado com sucesso! Jogadores movidos para o banco, histórico zerado e saldos restaurados."
+            }
+            is ResetLeagueResult.Error -> {
+                message.value = result.message
+            }
+        }
     }
 
     fun clearMessage() { message.value = null }
