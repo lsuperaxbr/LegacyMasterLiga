@@ -61,17 +61,8 @@ class ResetLeagueUseCase @Inject constructor(
             database.withTransaction {
                 val db = database.openHelper.writableDatabase
 
-                // A. JOGADORES: Mover todos os jogadores da liga (exceto do Banco) para o Banco da Liga
-                db.execSQL(
-                    """
-                    UPDATE players 
-                    SET clubId = ${bankClub.id}, 
-                        marketStatus = 'NOT_LISTED', 
-                        askingPriceCr = NULL, 
-                        updatedAt = $now 
-                    WHERE leagueId = $leagueId AND clubId != ${bankClub.id}
-                    """.trimIndent()
-                )
+                // A. JOGADORES: Apagar todos os jogadores da liga (localmente)
+                db.execSQL("DELETE FROM players WHERE leagueId = $leagueId")
 
                 // B. FINANCEIRO: Calcular saldo atual de cada clube e lançar ajuste compensatório RESET_ADJUSTMENT para 500 CR
                 database.query(
@@ -129,7 +120,7 @@ class ResetLeagueUseCase @Inject constructor(
                 val deadEntityTypes = listOf(
                     "COMPETITION", "SEASON", "ROUND", "MATCH", "STANDING",
                     "PARTICIPANT", "TRANSFER", "NEWS", "ARENA", "GOAL_EVENT",
-                    "AUCTION_LOT", "AUCTION_ITEM", "AUCTION_BID"
+                    "AUCTION_LOT", "AUCTION_ITEM", "AUCTION_BID", "PLAYER"
                 ).joinToString(",") { "'$it'" }
 
                 db.execSQL("DELETE FROM online_sync_queue WHERE entityType IN ($deadEntityTypes)")
@@ -142,7 +133,7 @@ class ResetLeagueUseCase @Inject constructor(
                     entityId = leagueId,
                     leagueId = leagueId,
                     summary = "Reset de Liga executado",
-                    details = "Jogadores movidos para o banco, histórico zerado e saldos ajustados para $DEFAULT_INITIAL_BALANCE_CR CR."
+                    details = "Jogadores e histórico apagados; saldos ajustados para $DEFAULT_INITIAL_BALANCE_CR CR."
                 )
             }
 
@@ -152,7 +143,7 @@ class ResetLeagueUseCase @Inject constructor(
                 val subcollections = listOf(
                     "matches", "standings", "transfers", "competitions",
                     "seasons", "rounds", "participants", "arena_duels",
-                    "auction_lots", "auction_items", "auction_bids", "news", "goal_events"
+                    "auction_lots", "auction_items", "auction_bids", "news", "goal_events", "players"
                 )
 
                 subcollections.forEach { sub ->

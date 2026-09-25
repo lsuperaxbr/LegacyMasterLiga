@@ -1,5 +1,8 @@
 package com.example.legacymasterliga.feature.settings.presentation
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -43,6 +47,12 @@ import com.example.legacymasterliga.core.model.DensityPreference
 import com.example.legacymasterliga.core.model.ThemePreference
 import com.example.legacymasterliga.core.model.TieBreakCriterion
 import com.example.legacymasterliga.core.model.UserRole
+import com.example.legacymasterliga.domain.model.Club
+import com.example.legacymasterliga.domain.model.CsvImportProgress
+import com.example.legacymasterliga.domain.model.CsvImportSummary
+import com.example.legacymasterliga.domain.model.CsvParseResult
+import com.example.legacymasterliga.domain.model.CsvTeamMapping
+import java.io.InputStream
 
 @Composable
 fun SettingsRoute(
@@ -51,6 +61,11 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val csvParseResult by viewModel.csvParseResult.collectAsStateWithLifecycle()
+    val csvExistingPlayerCount by viewModel.csvExistingPlayerCount.collectAsStateWithLifecycle()
+    val csvImportProgress by viewModel.csvImportProgress.collectAsStateWithLifecycle()
+    val csvImportSummary by viewModel.csvImportSummary.collectAsStateWithLifecycle()
+
     SettingsScreen(
         state = state,
         onBack = onBack,
@@ -61,6 +76,13 @@ fun SettingsRoute(
         onSaveRules = viewModel::saveRules,
         onInjectBankBalance = viewModel::injectBankBalance,
         onResetLeague = viewModel::resetLeague,
+        csvParseResult = csvParseResult,
+        csvExistingPlayerCount = csvExistingPlayerCount,
+        csvImportProgress = csvImportProgress,
+        csvImportSummary = csvImportSummary,
+        onImportCsvFile = viewModel::parseCsvStream,
+        onConfirmCsvImport = viewModel::confirmCsvImport,
+        onDismissCsvImport = viewModel::dismissCsvImport,
         onOpenSyncDiagnostic = onNavigateToDiagnostic
     )
 }
@@ -77,8 +99,16 @@ fun SettingsScreen(
     onSaveRules: (Int, Int, Int, Long, Long, List<TieBreakCriterion>, Boolean) -> Unit,
     onInjectBankBalance: (Long) -> Unit,
     onResetLeague: () -> Unit = {},
+    csvParseResult: CsvParseResult? = null,
+    csvExistingPlayerCount: Int = 0,
+    csvImportProgress: CsvImportProgress? = null,
+    csvImportSummary: CsvImportSummary? = null,
+    onImportCsvFile: (InputStream) -> Unit = {},
+    onConfirmCsvImport: (List<CsvTeamMapping>) -> Unit = {},
+    onDismissCsvImport: () -> Unit = {},
     onOpenSyncDiagnostic: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var leagueName by remember { mutableStateOf("") }
     var bankInjection by remember { mutableStateOf("") }
     var theme by remember { mutableStateOf(state.preferences.themePreference) }
@@ -95,6 +125,18 @@ fun SettingsScreen(
     var showCloudDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var resetConfirmInput by remember { mutableStateOf("") }
+
+    val csvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            runCatching {
+                context.contentResolver.openInputStream(selectedUri)?.let { stream ->
+                    onImportCsvFile(stream)
+                }
+            }
+        }
+    }
 
     val selectedLeague = state.leagues.firstOrNull { it.id == state.selectedLeagueId }
     LaunchedEffect(selectedLeague?.id, selectedLeague?.name) { leagueName = selectedLeague?.name.orEmpty() }
@@ -125,7 +167,7 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "Atenção: Esta ação moverá todos os jogadores para o Banco da Liga, zerará os elencos, apagará todas as partidas/temporadas/tabelas e restaurará o saldo dos clubes para 500 CR.\n\n" +
+                        "Atenção: Esta ação apagará todos os jogadores da liga, zerará os elencos, removerá todas as partidas/temporadas/tabelas e restaurará o saldo dos clubes para 500 CR.\n\n" +
                         "Um backup de segurança do estado atual do app será gerado automaticamente antes do reset.\n\n" +
                         "Digite 'RESET' abaixo para confirmar:",
                         style = MaterialTheme.typography.bodyMedium
@@ -246,6 +288,17 @@ fun SettingsScreen(
                     Text("Moeda oficial: CR", style = MaterialTheme.typography.bodySmall)
                 }
 
+                SettingsCard("Importação de Elencos") {
+                    Text("Carga em Lote de Atletas (CSV)", fontWeight = FontWeight.SemiBold)
+                    Text("Importe elencos do PES Editor 6 / Option File com vínculo de times para os clubes da liga.", style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = { csvLauncher.launch("*/*") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Importar elencos (CSV)")
+                    }
+                }
+
                 SettingsCard("Banco da Liga") {
                     Text("Injeção de capital (Saldo Inicial)", fontWeight = FontWeight.SemiBold)
                     Text("Defina o saldo disponível para premiações e operações do Banco.", style = MaterialTheme.typography.bodySmall)
@@ -345,7 +398,7 @@ fun SettingsScreen(
 
                 SettingsCard("Zona de Perigo") {
                     Text("Reset de Temporada/Liga", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-                    Text("Zera temporadas, partidas e histórico, movendo jogadores para o Banco da Liga. Preserva clubes, escudos, presidentes e usuários.", style = MaterialTheme.typography.bodySmall)
+                    Text("Apaga jogadores e histórico de partidas/temporadas, restaurando o saldo inicial dos clubes. Preserva clubes, escudos, presidentes e usuários.", style = MaterialTheme.typography.bodySmall)
                     Button(
                         onClick = { showResetDialog = true },
                         modifier = Modifier.fillMaxWidth(),
@@ -358,6 +411,19 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (csvParseResult != null) {
+        CsvImportDialog(
+            parseResult = csvParseResult,
+            existingPlayerCount = csvExistingPlayerCount,
+            clubs = state.clubs,
+            progress = csvImportProgress,
+            summary = csvImportSummary,
+            onDismiss = onDismissCsvImport,
+            onConfirmImport = onConfirmCsvImport,
+            onRequestReset = { showResetDialog = true }
+        )
     }
 
     if (showOnlineDialog) {
