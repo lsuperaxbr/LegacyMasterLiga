@@ -48,14 +48,16 @@ class RoomSettingsRepository @Inject constructor(
         competitionDao.observeById(competitionId),
         settingsDao.observeCompetitionSettings(competitionId),
     ) { competition, settings ->
-        val current = requireNotNull(competition) { "Competição não encontrada." }
+        if (competition == null) {
+            return@combine CompetitionRules(competitionId = competitionId)
+        }
         CompetitionRules(
             competitionId = competitionId,
-            pointsForWin = current.pointsForWin,
-            pointsForDraw = current.pointsForDraw,
-            pointsForLoss = current.pointsForLoss,
-            yellowCardFineCr = current.yellowCardFineCr,
-            redCardFineCr = current.redCardFineCr,
+            pointsForWin = competition.pointsForWin,
+            pointsForDraw = competition.pointsForDraw,
+            pointsForLoss = competition.pointsForLoss,
+            yellowCardFineCr = competition.yellowCardFineCr,
+            redCardFineCr = competition.redCardFineCr,
             tieBreakCriteria = settings?.tieBreakCriteriaCsv
                 ?.split(',')
                 ?.mapNotNull { value -> runCatching { TieBreakCriterion.valueOf(value) }.getOrNull() }

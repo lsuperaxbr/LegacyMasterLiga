@@ -62,9 +62,14 @@ class LeagueSettingsViewModel @Inject constructor(
 
     fun saveRules(win: Int, draw: Int, loss: Int, yellowFine: Long, redFine: Long, criteria: List<TieBreakCriterion>, highlightLeader: Boolean) = 
         launchAction("Regras da competição atualizadas.") {
+            val compId = selectedCompetitionId.value
+            if (compId == null) {
+                message.value = "Crie ou selecione uma competição primeiro."
+                return@launchAction
+            }
             repository.updateCompetitionRules(
                 CompetitionRules(
-                    competitionId = requireNotNull(selectedCompetitionId.value),
+                    competitionId = compId,
                     pointsForWin = win,
                     pointsForDraw = draw,
                     pointsForLoss = loss,
