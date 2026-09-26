@@ -48,10 +48,11 @@ class DeleteLeagueUseCase @Inject constructor(
                 )
             }
 
-            // 2. GUARDA DE LIGA ATIVA: Não permite excluir a liga atualmente selecionada/ativa.
-            if (activeLeagueId != null && targetLeagueId == activeLeagueId) {
+            // 2. GUARDA DE LIGA ATIVA: Não permite excluir a liga ativa se existirem outras ligas no app.
+            val totalLeaguesCount = leagueDao.observeAll().first().size
+            if (activeLeagueId != null && targetLeagueId == activeLeagueId && totalLeaguesCount > 1) {
                 return@withContext DeleteLeagueResult.Error(
-                    "Não é possível excluir a liga atualmente ativa. Selecione outra liga no topo da tela primeiro."
+                    "Não é possível excluir a liga atualmente ativa enquanto existirem outras ligas. Selecione outra liga no topo da tela primeiro."
                 )
             }
 

@@ -505,6 +505,8 @@ private fun DeleteLeagueDialog(
 
     val targetLeague = leagues.firstOrNull { it.id == selectedTargetLeagueId }
     val isActiveLeague = targetLeague?.id == activeLeagueId
+    val isOnlyRemainingLeague = leagues.size == 1
+    val isBlocked = isActiveLeague && !isOnlyRemainingLeague
     val expectedName = targetLeague?.name.orEmpty()
     val isNameMatched = targetLeague != null && confirmInput.trim() == expectedName.trim()
 
@@ -518,6 +520,15 @@ private fun DeleteLeagueDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error
                 )
+
+                if (isOnlyRemainingLeague) {
+                    Text(
+                        "Atenção: Esta é a ÚNICA liga cadastrada no aplicativo. Ao excluí-la, o aplicativo ficará sem ligas e retornará à tela de criação para que você possa começar do zero.",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
 
                 Text("Selecione a liga a ser excluída:", fontWeight = FontWeight.SemiBold)
 
@@ -555,9 +566,9 @@ private fun DeleteLeagueDialog(
                     }
                 }
 
-                if (isActiveLeague) {
+                if (isBlocked) {
                     Text(
-                        "Atenção: Não é possível excluir a liga atualmente ativa. Selecione outra liga no topo da tela primeiro.",
+                        "Atenção: Não é possível excluir a liga atualmente ativa enquanto existirem outras ligas. Selecione outra liga no topo da tela primeiro.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -583,7 +594,7 @@ private fun DeleteLeagueDialog(
                         onConfirmDelete(targetLeague.id)
                     }
                 },
-                enabled = isNameMatched && !isActiveLeague,
+                enabled = isNameMatched && !isBlocked,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error
                 )
