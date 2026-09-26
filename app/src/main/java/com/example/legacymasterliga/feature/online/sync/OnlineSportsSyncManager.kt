@@ -695,6 +695,8 @@ class OnlineSportsSyncManager @Inject constructor(
                     "skillImageUri" to p.skillImageUri, "notes" to p.notes,
                     "externalPlayerId" to p.externalPlayerId, "isActive" to p.isActive,
                     "attributesRaw" to p.attributesRaw, "overall" to p.overall,
+                    "heightCm" to p.heightCm, "preferredFoot" to p.preferredFoot,
+                    "nationality" to p.nationality, "shirtNumber" to p.shirtNumber,
                     "createdAt" to p.createdAt, "updatedAt" to p.updatedAt,
                 )
             }
@@ -1131,6 +1133,10 @@ class OnlineSportsSyncManager @Inject constructor(
             externalPlayerId = externalId,
             attributesRaw = d.nullableString("attributesRaw"),
             overall = (d["overall"] as? Number)?.toInt(),
+            heightCm = (d["heightCm"] as? Number)?.toInt(),
+            preferredFoot = d.nullableString("preferredFoot"),
+            nationality = d.nullableString("nationality"),
+            shirtNumber = (d["shirtNumber"] as? Number)?.toInt(),
             isActive = true, // Forçamos Ativo na sincronização para garantir visibilidade
             createdAt = d.long("createdAt"),
             updatedAt = d.long("clientUpdatedAt")

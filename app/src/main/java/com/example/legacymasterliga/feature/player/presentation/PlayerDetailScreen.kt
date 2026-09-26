@@ -109,7 +109,14 @@ fun PlayerDetailScreen(
             ) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(player.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("${player.position ?: "Sem posição"} • ${player.clubName ?: "Sem clube"}", style = MaterialTheme.typography.titleMedium)
+                    val detailsList = mutableListOf<String>()
+                    player.position?.let { detailsList.add(it) }
+                    player.clubName?.let { detailsList.add(it) }
+                    player.shirtNumber?.let { detailsList.add("#$it") }
+                    player.heightCm?.let { detailsList.add("${it}cm") }
+                    player.preferredFoot?.let { detailsList.add("Pé $it") }
+                    player.nationality?.let { detailsList.add(it) }
+                    Text(detailsList.joinToString(" • ").ifBlank { "Ficha do Jogador" }, style = MaterialTheme.typography.titleMedium)
                     
                     Spacer(Modifier.height(8.dp))
                     

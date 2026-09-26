@@ -49,7 +49,11 @@ internal fun PlayerEntity.toDomain(): Player = Player(
     notes = notes,
     externalPlayerId = externalPlayerId,
     attributesRaw = attributesRaw,
-    overall = overall
+    overall = overall,
+    heightCm = heightCm,
+    preferredFoot = preferredFoot,
+    nationality = nationality,
+    shirtNumber = shirtNumber
 )
 
 internal fun PlayerWithClub.toDomain(): Player = player.toDomain().copy(clubName = clubName)

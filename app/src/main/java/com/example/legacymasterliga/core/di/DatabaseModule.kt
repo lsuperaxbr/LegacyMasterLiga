@@ -701,6 +701,15 @@ object DatabaseModule {
         }
     }
 
+    private val migration29To30 = object : Migration(29, 30) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE players ADD COLUMN heightCm INTEGER")
+            db.execSQL("ALTER TABLE players ADD COLUMN preferredFoot TEXT")
+            db.execSQL("ALTER TABLE players ADD COLUMN nationality TEXT")
+            db.execSQL("ALTER TABLE players ADD COLUMN shirtNumber INTEGER")
+        }
+    }
+
     /** Complete, ordered migration chain. Keep new migrations appended and covered by tests. */
     val migrations: Array<Migration> = arrayOf(
         migration1To2,
@@ -731,6 +740,7 @@ object DatabaseModule {
         migration26To27,
         migration27To28,
         migration28To29,
+        migration29To30,
     )
 
     @Provides

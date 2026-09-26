@@ -6,6 +6,11 @@ data class CsvRawPlayer(
     val csvTeam: String,
     val position: String? = null,
     val overall: Int? = null,
+    val heightCm: Int? = null,
+    val preferredFoot: String? = null,
+    val nationality: String? = null,
+    val shirtNumber: Int? = null,
+    val attributesRaw: String? = null,
 )
 
 data class CsvParseResult(
@@ -15,7 +20,7 @@ data class CsvParseResult(
 
 data class CsvTeamMapping(
     val csvTeam: String,
-    val targetClubId: Long? = null, // null significa "Ignorar este time" se isBank e ignore forem false
+    val targetClubId: Long? = null,
     val isBank: Boolean = false,
     val ignore: Boolean = false,
     val isConfirmed: Boolean = false,

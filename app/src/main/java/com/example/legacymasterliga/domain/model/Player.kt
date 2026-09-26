@@ -15,5 +15,9 @@ data class Player(
     val externalPlayerId: String?,
     val attributesRaw: String? = null,
     val overall: Int? = null,
+    val heightCm: Int? = null,
+    val preferredFoot: String? = null,
+    val nationality: String? = null,
+    val shirtNumber: Int? = null,
     val clubName: String? = null
 )

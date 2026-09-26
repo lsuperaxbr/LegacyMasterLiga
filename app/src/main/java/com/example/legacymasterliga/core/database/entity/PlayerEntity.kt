@@ -43,6 +43,10 @@ data class PlayerEntity(
     val externalPlayerId: String? = null,
     val attributesRaw: String? = null,
     val overall: Int? = null,
+    val heightCm: Int? = null,
+    val preferredFoot: String? = null,
+    val nationality: String? = null,
+    val shirtNumber: Int? = null,
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
