@@ -19,6 +19,7 @@ import com.example.legacymasterliga.domain.repository.ClubRepository
 import com.example.legacymasterliga.domain.usecase.DeleteLeagueResult
 import com.example.legacymasterliga.domain.usecase.DeleteLeagueUseCase
 import com.example.legacymasterliga.domain.usecase.ImportCsvRostersUseCase
+import com.example.legacymasterliga.domain.usecase.PurgeGhostResult
 import com.example.legacymasterliga.domain.usecase.ResetLeagueResult
 import com.example.legacymasterliga.domain.usecase.ResetLeagueUseCase
 import com.example.legacymasterliga.feature.finance.domain.FinanceRepository
@@ -69,6 +70,7 @@ class SettingsViewModel @Inject constructor(
     val csvExistingPlayerCount = MutableStateFlow(0)
     val csvImportProgress = MutableStateFlow<CsvImportProgress?>(null)
     val csvImportSummary = MutableStateFlow<CsvImportSummary?>(null)
+    val purgeGhostResult = MutableStateFlow<PurgeGhostResult?>(null)
 
     private val leagues = repository.observeLeagues()
     private val competitions = selectedLeagueId.flatMapLatest { id ->
@@ -173,6 +175,17 @@ class SettingsViewModel @Inject constructor(
                 message.value = result.message
             }
         }
+    }
+
+    fun purgeGhostLeague() = viewModelScope.launch {
+        runCatching { deleteLeagueUseCase.purgeGhostLeague("Liga M L Amigos") }
+            .onSuccess { result ->
+                purgeGhostResult.value = result
+                message.value = "Limpeza de liga fantasma concluída. Perfis desvinculados: ${result.profilesUpdatedCount}."
+            }
+            .onFailure { error ->
+                message.value = "Falha na purga da liga fantasma: ${error.message}"
+            }
     }
 
     fun parseCsvStream(inputStream: InputStream) = viewModelScope.launch(Dispatchers.IO) {

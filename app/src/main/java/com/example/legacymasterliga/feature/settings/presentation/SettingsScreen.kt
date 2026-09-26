@@ -80,6 +80,7 @@ fun SettingsRoute(
         onInjectBankBalance = viewModel::injectBankBalance,
         onResetLeague = viewModel::resetLeague,
         onDeleteLeague = viewModel::deleteLeague,
+        onPurgeGhostLeague = viewModel::purgeGhostLeague,
         csvParseResult = csvParseResult,
         csvExistingPlayerCount = csvExistingPlayerCount,
         csvImportProgress = csvImportProgress,
@@ -104,6 +105,7 @@ fun SettingsScreen(
     onInjectBankBalance: (Long) -> Unit,
     onResetLeague: () -> Unit = {},
     onDeleteLeague: (Long) -> Unit = {},
+    onPurgeGhostLeague: () -> Unit = {},
     csvParseResult: CsvParseResult? = null,
     csvExistingPlayerCount: Int = 0,
     csvImportProgress: CsvImportProgress? = null,
@@ -439,6 +441,21 @@ fun SettingsScreen(
                         )
                     ) {
                         Text("Excluir Liga")
+                    }
+
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                    Text("Limpeza de Resíduo Fantasma (Remoção Única)", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text("Remove resíduos da liga 'Liga M L Amigos' dos perfis no Firestore e deleta o documento e subcoleções remotas se existirem.", style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = { onPurgeGhostLeague() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    ) {
+                        Text("Purga de Resíduo Fantasma na Nuvem")
                     }
                 }
             }
