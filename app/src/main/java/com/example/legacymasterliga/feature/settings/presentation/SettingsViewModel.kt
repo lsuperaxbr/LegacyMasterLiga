@@ -16,6 +16,8 @@ import com.example.legacymasterliga.domain.model.User
 import com.example.legacymasterliga.domain.parser.CsvRosterParser
 import com.example.legacymasterliga.domain.repository.AuthRepository
 import com.example.legacymasterliga.domain.repository.ClubRepository
+import com.example.legacymasterliga.domain.usecase.DeleteLeagueResult
+import com.example.legacymasterliga.domain.usecase.DeleteLeagueUseCase
 import com.example.legacymasterliga.domain.usecase.ImportCsvRostersUseCase
 import com.example.legacymasterliga.domain.usecase.ResetLeagueResult
 import com.example.legacymasterliga.domain.usecase.ResetLeagueUseCase
@@ -56,6 +58,7 @@ class SettingsViewModel @Inject constructor(
     private val clubRepository: ClubRepository,
     private val financeRepository: FinanceRepository,
     private val resetLeagueUseCase: ResetLeagueUseCase,
+    private val deleteLeagueUseCase: DeleteLeagueUseCase,
     private val importCsvRostersUseCase: ImportCsvRostersUseCase,
 ) : ViewModel() {
     private val selectedLeagueId = MutableStateFlow<Long?>(null)
@@ -155,6 +158,18 @@ class SettingsViewModel @Inject constructor(
                 message.value = "Reset da Liga executado com sucesso! Jogadores e histórico zerados e saldos restaurados."
             }
             is ResetLeagueResult.Error -> {
+                message.value = result.message
+            }
+        }
+    }
+
+    fun deleteLeague(targetLeagueId: Long) = viewModelScope.launch {
+        val activeId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id
+        when (val result = deleteLeagueUseCase(targetLeagueId, activeId)) {
+            is DeleteLeagueResult.Success -> {
+                message.value = "Liga excluída com sucesso! Todos os dados associados foram removidos."
+            }
+            is DeleteLeagueResult.Error -> {
                 message.value = result.message
             }
         }

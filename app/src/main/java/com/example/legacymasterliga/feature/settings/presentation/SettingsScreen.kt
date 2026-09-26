@@ -1,4 +1,3 @@
-
 package com.example.legacymasterliga.feature.settings.presentation
 
 import android.net.Uri
@@ -20,7 +19,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,11 +50,11 @@ import com.example.legacymasterliga.core.model.DensityPreference
 import com.example.legacymasterliga.core.model.ThemePreference
 import com.example.legacymasterliga.core.model.TieBreakCriterion
 import com.example.legacymasterliga.core.model.UserRole
-import com.example.legacymasterliga.domain.model.Club
 import com.example.legacymasterliga.domain.model.CsvImportProgress
 import com.example.legacymasterliga.domain.model.CsvImportSummary
 import com.example.legacymasterliga.domain.model.CsvParseResult
 import com.example.legacymasterliga.domain.model.CsvTeamMapping
+import com.example.legacymasterliga.domain.model.League
 import java.io.InputStream
 
 @Composable
@@ -77,6 +79,7 @@ fun SettingsRoute(
         onSaveRules = viewModel::saveRules,
         onInjectBankBalance = viewModel::injectBankBalance,
         onResetLeague = viewModel::resetLeague,
+        onDeleteLeague = viewModel::deleteLeague,
         csvParseResult = csvParseResult,
         csvExistingPlayerCount = csvExistingPlayerCount,
         csvImportProgress = csvImportProgress,
@@ -100,6 +103,7 @@ fun SettingsScreen(
     onSaveRules: (Int, Int, Int, Long, Long, List<TieBreakCriterion>, Boolean) -> Unit,
     onInjectBankBalance: (Long) -> Unit,
     onResetLeague: () -> Unit = {},
+    onDeleteLeague: (Long) -> Unit = {},
     csvParseResult: CsvParseResult? = null,
     csvExistingPlayerCount: Int = 0,
     csvImportProgress: CsvImportProgress? = null,
@@ -125,6 +129,7 @@ fun SettingsScreen(
     var showOnlineDialog by remember { mutableStateOf(false) }
     var showCloudDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
+    var showDeleteLeagueDialog by remember { mutableStateOf(false) }
     var resetConfirmInput by remember { mutableStateOf("") }
 
     val csvLauncher = rememberLauncherForActivityResult(
@@ -206,6 +211,18 @@ fun SettingsScreen(
                 ) {
                     Text("Cancelar")
                 }
+            }
+        )
+    }
+
+    if (showDeleteLeagueDialog) {
+        DeleteLeagueDialog(
+            leagues = state.leagues,
+            activeLeagueId = state.selectedLeagueId,
+            onDismiss = { showDeleteLeagueDialog = false },
+            onConfirmDelete = { targetLeagueId ->
+                showDeleteLeagueDialog = false
+                onDeleteLeague(targetLeagueId)
             }
         )
     }
@@ -409,6 +426,20 @@ fun SettingsScreen(
                     ) {
                         Text("Resetar Liga")
                     }
+
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                    Text("Exclusão Total de Liga", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text("Remove completamente uma liga e TODOS os seus clubes, partidas e dados locais e na nuvem. Ação irreversível.", style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = { showDeleteLeagueDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Excluir Liga")
+                    }
                 }
             }
         }
@@ -439,6 +470,116 @@ fun SettingsScreen(
             onDismiss = { showCloudDialog = false }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeleteLeagueDialog(
+    leagues: List<League>,
+    activeLeagueId: Long?,
+    onDismiss: () -> Unit,
+    onConfirmDelete: (Long) -> Unit,
+) {
+    var selectedTargetLeagueId by remember(leagues, activeLeagueId) {
+        mutableStateOf(leagues.firstOrNull { it.id != activeLeagueId }?.id ?: leagues.firstOrNull()?.id)
+    }
+    var confirmInput by remember { mutableStateOf("") }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val targetLeague = leagues.firstOrNull { it.id == selectedTargetLeagueId }
+    val isActiveLeague = targetLeague?.id == activeLeagueId
+    val expectedName = targetLeague?.name.orEmpty()
+    val isNameMatched = targetLeague != null && confirmInput.trim() == expectedName.trim()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Excluir Liga — Ação Irreversível") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Exclusão irreversível. A liga e TODOS os dados dela (clubes, jogadores, partidas, finanças e histórico) serão apagados localmente e na nuvem.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                Text("Selecione a liga a ser excluída:", fontWeight = FontWeight.SemiBold)
+
+                ExposedDropdownMenuBox(
+                    expanded = dropdownExpanded,
+                    onExpandedChange = { dropdownExpanded = !dropdownExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = targetLeague?.name ?: "Selecione uma liga",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Liga Alvo") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false }
+                    ) {
+                        leagues.forEach { league ->
+                            DropdownMenuItem(
+                                text = {
+                                    val isCurrentActive = league.id == activeLeagueId
+                                    Text("${league.name}${if (isCurrentActive) " (Ativa no momento)" else ""}")
+                                },
+                                onClick = {
+                                    selectedTargetLeagueId = league.id
+                                    confirmInput = ""
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (isActiveLeague) {
+                    Text(
+                        "Atenção: Não é possível excluir a liga atualmente ativa. Selecione outra liga no topo da tela primeiro.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else if (targetLeague != null) {
+                    Text(
+                        "Para confirmar a exclusão, digite o NOME EXATO da liga abaixo:\n'$expectedName'",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = confirmInput,
+                        onValueChange = { confirmInput = it },
+                        label = { Text("Nome exato da liga") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (targetLeague != null) {
+                        onConfirmDelete(targetLeague.id)
+                    }
+                },
+                enabled = isNameMatched && !isActiveLeague,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Excluir Liga Definitivamente")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
