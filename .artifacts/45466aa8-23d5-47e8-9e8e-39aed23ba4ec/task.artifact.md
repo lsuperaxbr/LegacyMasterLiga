@@ -1,7 +1,10 @@
 # Task List
 
-- [x] Commit e push inicial (antes das alterações)
-- [x] Atualizar `CsvRosterParser.kt` para atribuir jogadores com time em branco ao "Banco da Liga" (`InitialDataDefaults.LEAGUE_BANK_NAME`) e descartar apenas se o nome estiver em branco
-- [x] Atualizar testes em `CsvRosterParserTest.kt` para cobrir o caso de time em branco e descarte por nome em branco
-- [x] Executar Clean e Rebuild / Testes (`app:assembleDebug`)
-- [x] Criar walkthrough e realizar commit e push final com a mensagem "Importação de jogadores sem clube para o Banco da Liga"
+- [/] Commit e push inicial (antes das alterações de código)
+- [ ] Atualizar `OnlineSyncDao.kt` com suporte a observação, reprocessamento e descarte de itens em quarentena (`QUARANTINED`)
+- [ ] Atualizar `OnlineSportsSyncManager.kt` para limitar falhas em 3 tentativas e mover para `QUARANTINED` sem travar a fila
+- [ ] Atualizar `RoomAuctionRepository.kt` com transação atômica no Firestore (`runTransaction`) para `placeBid` em ligas online
+- [ ] Atualizar `SyncDiagnosticScreen.kt` & `SyncDiagnosticViewModel.kt` com o painel administrativo de quarentena
+- [ ] Atualizar testes unitários (`OnlineSyncDaoTest.kt` e relacionados)
+- [ ] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
+- [ ] Criar walkthrough e executar commit e push final no GitHub com a mensagem `"Reforço de sincronização: lances de leilão e quarentena na fila"`
