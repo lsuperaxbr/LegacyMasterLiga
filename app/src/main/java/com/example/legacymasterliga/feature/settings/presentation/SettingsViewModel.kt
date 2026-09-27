@@ -188,18 +188,37 @@ class SettingsViewModel @Inject constructor(
             }
     }
 
-    fun parseCsvStream(inputStream: InputStream) = viewModelScope.launch(Dispatchers.IO) {
-        val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id ?: return@launch
-        val result = CsvRosterParser.parse(inputStream)
-
-        var count = 0
-        database.query("SELECT COUNT(*) FROM players WHERE leagueId = ?", arrayOf(leagueId.toString())).use { cursor ->
-            if (cursor.moveToFirst()) count = cursor.getInt(0)
+    fun parseCsvUri(contentResolver: android.content.ContentResolver, uri: android.net.Uri) = viewModelScope.launch(Dispatchers.IO) {
+        val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id
+        if (leagueId == null) {
+            withContext(Dispatchers.Main) {
+                message.value = "Selecione uma liga antes de importar."
+            }
+            return@launch
         }
 
-        withContext(Dispatchers.Main) {
-            csvExistingPlayerCount.value = count
-            csvParseResult.value = result
+        try {
+            val result = contentResolver.openInputStream(uri)?.use { stream ->
+                CsvRosterParser.parse(stream)
+            } ?: CsvParseResult(emptyList(), listOf("Não foi possível abrir o arquivo selecionado."))
+
+            var count = 0
+            database.query("SELECT COUNT(*) FROM players WHERE leagueId = ?", arrayOf(leagueId.toString())).use { cursor ->
+                if (cursor.moveToFirst()) count = cursor.getInt(0)
+            }
+
+            val teams = result.players.map { it.csvTeam }.distinct()
+            android.util.Log.d("CsvRosterParser", "Atletas extraídos: ${result.players.size}, Times identificados (${teams.size}): $teams")
+
+            withContext(Dispatchers.Main) {
+                csvExistingPlayerCount.value = count
+                csvParseResult.value = result
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CsvRosterParser", "Erro de leitura do arquivo CSV", e)
+            withContext(Dispatchers.Main) {
+                csvParseResult.value = CsvParseResult(emptyList(), listOf("Erro de leitura do arquivo CSV: ${e.message}"))
+            }
         }
     }
 

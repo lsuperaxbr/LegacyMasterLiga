@@ -126,41 +126,56 @@ fun CsvImportDialog(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            "Vincule cada time do CSV ao clube correspondente da liga. Times sem correspondência ficam como 'Ignorar este time' por padrão.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-
-                        // Ação em Lote: Marcar todos os não vinculados como "Criar clube novo"
-                        OutlinedButton(
-                            onClick = {
-                                csvTeams.forEach { csvTeam ->
-                                    val current = selectedMappings[csvTeam]
-                                    if (current == null || current.ignore) {
-                                        selectedMappings[csvTeam] = CsvTeamMapping(csvTeam = csvTeam, createNewClub = true)
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Criar clube novo para não vinculados")
-                        }
-
-                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
-
-                        csvTeams.forEach { csvTeam ->
-                            val currentMapping = selectedMappings[csvTeam] ?: CsvTeamMapping(csvTeam = csvTeam, ignore = true)
-                            val teamPlayerCount = parseResult.players.count { it.csvTeam == csvTeam }
-
-                            TeamMappingRow(
-                                csvTeam = csvTeam,
-                                playerCount = teamPlayerCount,
-                                currentMapping = currentMapping,
-                                clubs = clubs,
-                                onMappingChanged = { updated ->
-                                    selectedMappings[csvTeam] = updated
-                                }
+                        if (csvTeams.isEmpty()) {
+                            Text(
+                                "Nenhum time ou atleta válido pôde ser extraído do arquivo selecionado.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold
                             )
+                            if (parseResult.errors.isNotEmpty()) {
+                                Text("Motivos do erro / alertas:", fontWeight = FontWeight.SemiBold)
+                                parseResult.errors.forEach { err ->
+                                    Text("• $err", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        } else {
+                            Text(
+                                "Vincule cada time do CSV ao clube correspondente da liga. Times sem correspondência ficam como 'Ignorar este time' por padrão.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+
+                            // Ação em Lote: Marcar todos os não vinculados como "Criar clube novo"
+                            OutlinedButton(
+                                onClick = {
+                                    csvTeams.forEach { csvTeam ->
+                                        val current = selectedMappings[csvTeam]
+                                        if (current == null || current.ignore) {
+                                            selectedMappings[csvTeam] = CsvTeamMapping(csvTeam = csvTeam, createNewClub = true)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Criar clube novo para não vinculados")
+                            }
+
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                            csvTeams.forEach { csvTeam ->
+                                val currentMapping = selectedMappings[csvTeam] ?: CsvTeamMapping(csvTeam = csvTeam, ignore = true)
+                                val teamPlayerCount = parseResult.players.count { it.csvTeam == csvTeam }
+
+                                TeamMappingRow(
+                                    csvTeam = csvTeam,
+                                    playerCount = teamPlayerCount,
+                                    currentMapping = currentMapping,
+                                    clubs = clubs,
+                                    onMappingChanged = { updated ->
+                                        selectedMappings[csvTeam] = updated
+                                    }
+                                )
+                            }
                         }
                     }
                 },

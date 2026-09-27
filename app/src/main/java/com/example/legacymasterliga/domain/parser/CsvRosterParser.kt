@@ -1,6 +1,5 @@
 package com.example.legacymasterliga.domain.parser
 
-import com.example.legacymasterliga.domain.PlayerAttributesParser
 import com.example.legacymasterliga.domain.model.CsvParseResult
 import com.example.legacymasterliga.domain.model.CsvRawPlayer
 import java.io.InputStream
@@ -53,24 +52,24 @@ object CsvRosterParser {
         // Verificar se a primeira linha é cabeçalho
         val firstTokens = parseTokens(lines[0], delimiter)
         val isHeader = firstTokens.any { token ->
-            val clean = token.lowercase()
-            clean.contains("name") || clean.contains("nome") || clean.contains("player") ||
-                    clean.contains("team") || clean.contains("time") || clean.contains("club") || clean.contains("equipe")
+            val clean = token.lowercase().trim()
+            clean == "nome" || clean == "name" || clean == "player" ||
+                    clean == "time" || clean == "team" || clean == "club" || clean == "clube" || clean == "equipe"
         }
 
         if (isHeader) {
             startIndex = 1
             firstTokens.forEachIndexed { idx, token ->
-                val clean = token.lowercase()
+                val clean = token.lowercase().trim()
                 when {
-                    clean.contains("team") || clean.contains("time") || clean.contains("club") || clean.contains("equipe") -> teamCol = idx
-                    clean.contains("name") || clean.contains("nome") || clean.contains("player") || clean.contains("jogador") -> nameCol = idx
-                    clean == "pos" || clean.contains("posição") || clean.contains("posicao") -> posCol = idx
-                    clean.contains("ovr") || clean.contains("overall") || clean.contains("geral") -> ovrCol = idx
-                    clean.contains("alt") || clean.contains("height") -> heightCol = idx
-                    clean.contains("pé") || clean.contains("pe") || clean.contains("foot") -> footCol = idx
-                    clean.contains("nac") || clean.contains("nation") -> natCol = idx
-                    clean.contains("camisa") || clean.contains("shirt") || clean.contains("number") || clean == "no" -> shirtCol = idx
+                    clean == "team" || clean == "time" || clean == "club" || clean == "clube" || clean == "equipe" -> teamCol = idx
+                    clean == "name" || clean == "nome" || clean == "player" || clean == "jogador" -> nameCol = idx
+                    clean == "pos" || clean == "posição" || clean == "posicao" || clean == "position" -> posCol = idx
+                    clean == "ovr" || clean == "overall" || clean == "geral" -> ovrCol = idx
+                    clean == "altura" || clean == "height" || clean == "alt" -> heightCol = idx
+                    clean == "pé" || clean == "pe" || clean == "foot" || clean == "preferred foot" -> footCol = idx
+                    clean == "nacionalidade" || clean == "nation" || clean == "nac" || clean == "nationality" -> natCol = idx
+                    clean == "camisa" || clean == "shirt" || clean == "number" || clean == "no" -> shirtCol = idx
                     clean == "attack" || clean == "att" -> attrStartCol = idx
                 }
             }

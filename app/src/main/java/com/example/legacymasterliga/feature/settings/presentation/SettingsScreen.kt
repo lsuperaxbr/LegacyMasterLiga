@@ -63,6 +63,7 @@ fun SettingsRoute(
     onNavigateToDiagnostic: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val csvParseResult by viewModel.csvParseResult.collectAsStateWithLifecycle()
     val csvExistingPlayerCount by viewModel.csvExistingPlayerCount.collectAsStateWithLifecycle()
@@ -85,7 +86,7 @@ fun SettingsRoute(
         csvExistingPlayerCount = csvExistingPlayerCount,
         csvImportProgress = csvImportProgress,
         csvImportSummary = csvImportSummary,
-        onImportCsvFile = viewModel::parseCsvStream,
+        onImportCsvUri = { uri -> viewModel.parseCsvUri(context.contentResolver, uri) },
         onConfirmCsvImport = viewModel::confirmCsvImport,
         onDismissCsvImport = viewModel::dismissCsvImport,
         onOpenSyncDiagnostic = onNavigateToDiagnostic
@@ -110,7 +111,7 @@ fun SettingsScreen(
     csvExistingPlayerCount: Int = 0,
     csvImportProgress: CsvImportProgress? = null,
     csvImportSummary: CsvImportSummary? = null,
-    onImportCsvFile: (InputStream) -> Unit = {},
+    onImportCsvUri: (Uri) -> Unit = {},
     onConfirmCsvImport: (List<CsvTeamMapping>) -> Unit = {},
     onDismissCsvImport: () -> Unit = {},
     onOpenSyncDiagnostic: () -> Unit = {}
@@ -138,11 +139,7 @@ fun SettingsScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { selectedUri ->
-            runCatching {
-                context.contentResolver.openInputStream(selectedUri)?.let { stream ->
-                    onImportCsvFile(stream)
-                }
-            }
+            onImportCsvUri(selectedUri)
         }
     }
 
