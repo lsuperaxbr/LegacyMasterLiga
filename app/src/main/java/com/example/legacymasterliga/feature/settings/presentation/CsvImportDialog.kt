@@ -19,6 +19,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -121,7 +122,7 @@ fun CsvImportDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = 420.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -129,6 +130,23 @@ fun CsvImportDialog(
                             "Vincule cada time do CSV ao clube correspondente da liga. Times sem correspondência ficam como 'Ignorar este time' por padrão.",
                             style = MaterialTheme.typography.bodySmall
                         )
+
+                        // Ação em Lote: Marcar todos os não vinculados como "Criar clube novo"
+                        OutlinedButton(
+                            onClick = {
+                                csvTeams.forEach { csvTeam ->
+                                    val current = selectedMappings[csvTeam]
+                                    if (current == null || current.ignore) {
+                                        selectedMappings[csvTeam] = CsvTeamMapping(csvTeam = csvTeam, createNewClub = true)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Criar clube novo para não vinculados")
+                        }
+
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
 
                         csvTeams.forEach { csvTeam ->
                             val currentMapping = selectedMappings[csvTeam] ?: CsvTeamMapping(csvTeam = csvTeam, ignore = true)
@@ -147,7 +165,7 @@ fun CsvImportDialog(
                     }
                 },
                 confirmButton = {
-                    val activeImportsCount = selectedMappings.values.filter { !it.ignore && (it.targetClubId != null || it.isBank) }.size
+                    val activeImportsCount = selectedMappings.values.filter { !it.ignore && (it.targetClubId != null || it.isBank || it.createNewClub) }.size
                     Button(
                         onClick = {
                             step = CsvImportStep.PROGRESS
@@ -202,11 +220,22 @@ fun CsvImportDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = 420.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (summary != null) {
+                            Text("Resumo Geral da Operação:", fontWeight = FontWeight.Bold)
+                            Text("• Clubes novos criados: ${summary.createdClubsCount}", style = MaterialTheme.typography.bodyMedium)
+                            Text("• Atletas vinculados a clubes novos: ${summary.newClubPlayersCount}", style = MaterialTheme.typography.bodyMedium)
+                            Text("• Atletas colocados no Banco da Liga: ${summary.bankPlayersCount}", style = MaterialTheme.typography.bodyMedium)
+                            Text("• Atletas ignorados: ${summary.ignoredPlayersCount}", style = MaterialTheme.typography.bodyMedium)
+                            if (summary.skippedDuplicates > 0) {
+                                Text("• Duplicatas ignoradas: ${summary.skippedDuplicates}", style = MaterialTheme.typography.bodyMedium)
+                            }
+
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
                             Text("Atletas Importados por Clube:", fontWeight = FontWeight.Bold)
                             summary.importedCountByClub.forEach { (clubName, count) ->
                                 Text("• $clubName: $count atletas", style = MaterialTheme.typography.bodyMedium)
@@ -216,10 +245,6 @@ fun CsvImportDialog(
                                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                                 Text("Times Ignorados (${summary.ignoredTeams.size}):", fontWeight = FontWeight.Bold)
                                 Text(summary.ignoredTeams.joinToString(", "), style = MaterialTheme.typography.bodySmall)
-                            }
-
-                            if (summary.skippedDuplicates > 0) {
-                                Text("• Duplicatas ignoradas: ${summary.skippedDuplicates}", style = MaterialTheme.typography.bodySmall)
                             }
 
                             if (summary.lineErrors.isNotEmpty()) {
@@ -252,9 +277,10 @@ private fun TeamMappingRow(
     var expanded by remember { mutableStateOf(false) }
 
     val displayText = when {
-        currentMapping.ignore -> "Ignorar este time"
+        currentMapping.createNewClub -> "Criar clube novo ('$csvTeam')"
         currentMapping.isBank -> "Banco da Liga"
         currentMapping.targetClubId != null -> clubs.firstOrNull { it.id == currentMapping.targetClubId }?.name ?: "Clube Selecionado"
+        currentMapping.ignore -> "Ignorar este time"
         else -> "Ignorar este time"
     }
 
@@ -287,6 +313,13 @@ private fun TeamMappingRow(
                         text = { Text("Ignorar este time") },
                         onClick = {
                             onMappingChanged(CsvTeamMapping(csvTeam = csvTeam, ignore = true))
+                            expanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Criar clube novo ('$csvTeam')") },
+                        onClick = {
+                            onMappingChanged(CsvTeamMapping(csvTeam = csvTeam, createNewClub = true))
                             expanded = false
                         }
                     )

@@ -22,6 +22,7 @@ data class CsvTeamMapping(
     val csvTeam: String,
     val targetClubId: Long? = null,
     val isBank: Boolean = false,
+    val createNewClub: Boolean = false,
     val ignore: Boolean = false,
     val isConfirmed: Boolean = false,
 )
@@ -34,8 +35,12 @@ data class CsvImportProgress(
 )
 
 data class CsvImportSummary(
-    val importedCountByClub: Map<String, Int>,
-    val ignoredTeams: List<String>,
-    val skippedDuplicates: Int,
-    val lineErrors: List<String>,
+    val createdClubsCount: Int = 0,
+    val importedCountByClub: Map<String, Int> = emptyMap(),
+    val bankPlayersCount: Int = 0,
+    val newClubPlayersCount: Int = 0,
+    val ignoredTeams: List<String> = emptyList(),
+    val ignoredPlayersCount: Int = 0,
+    val skippedDuplicates: Int = 0,
+    val lineErrors: List<String> = emptyList(),
 )
