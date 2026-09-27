@@ -28,6 +28,8 @@ class CsvRosterParserTest {
 
         val teams = result.players.map { it.csvTeam }.distinct().sorted()
         assertEquals(listOf("Barcelona", "Inter de Milão"), teams)
+        assertEquals(3, result.teamPlayerCounts["Barcelona"])
+        assertEquals(3, result.teamPlayerCounts["Inter de Milão"])
 
         // Verificar o jogador Lionel Messi
         val messi = result.players.first { it.name == "Lionel Messi" }
@@ -47,5 +49,21 @@ class CsvRosterParserTest {
         assertEquals(89, neuer.overall)
         assertEquals(193, neuer.heightCm)
         assertEquals(1, neuer.shirtNumber)
+    }
+
+    @Test
+    fun `parse csv with UTF8 BOM strips BOM and succeeds`() {
+        val bomCsvContent = "\uFEFF" + """
+            Nome;Time;Posição;Geral
+            "Lionel Messi";"Barcelona";"PE";93
+        """.trimIndent()
+
+        val inputStream = ByteArrayInputStream(bomCsvContent.toByteArray(Charsets.UTF_8))
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(1, result.players.size)
+        assertEquals("Lionel Messi", result.players[0].name)
+        assertEquals("Barcelona", result.players[0].csvTeam)
     }
 }

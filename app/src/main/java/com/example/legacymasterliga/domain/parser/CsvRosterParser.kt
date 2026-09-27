@@ -1,10 +1,13 @@
 package com.example.legacymasterliga.domain.parser
 
+import android.util.Log
 import com.example.legacymasterliga.domain.model.CsvParseResult
 import com.example.legacymasterliga.domain.model.CsvRawPlayer
 import java.io.InputStream
 
 object CsvRosterParser {
+
+    private const val TAG = "CsvRosterParser"
 
     private val POSITION_INDEX_MAP = mapOf(
         0 to "GOL",
@@ -26,6 +29,17 @@ object CsvRosterParser {
         val lines = inputStream.bufferedReader(Charsets.UTF_8).readLines()
         if (lines.isEmpty()) {
             return CsvParseResult(emptyList(), listOf("O arquivo CSV está vazio."))
+        }
+
+        // Diagnóstico e sanitização de BOM (\uFEFF) na Linha 1
+        val firstLine = lines.firstOrNull().orEmpty()
+        val hasBom = firstLine.startsWith("\uFEFF") || firstLine.startsWith("\uFFFE")
+        val charCodes1to10 = firstLine.take(10).map { it.code }
+        val firstRawLineFormatted = formatRawLineForDisplay(firstLine)
+
+        Log.d(TAG, "DIAGNOSTICO CSV: Total linhas=${lines.size}, Tem BOM=$hasBom, Char codes 1-10=$charCodes1to10")
+        lines.take(3).forEachIndexed { index, line ->
+            Log.d(TAG, "Linha Bruta ${index + 1}: ${formatRawLineForDisplay(line)}")
         }
 
         // Detectar delimitador predominantemente usado (, ou ;)
@@ -52,7 +66,7 @@ object CsvRosterParser {
         // Verificar se a primeira linha é cabeçalho
         val firstTokens = parseTokens(lines[0], delimiter)
         val isHeader = firstTokens.any { token ->
-            val clean = token.lowercase().trim()
+            val clean = cleanToken(token)
             clean == "nome" || clean == "name" || clean == "player" ||
                     clean == "time" || clean == "team" || clean == "club" || clean == "clube" || clean == "equipe"
         }
@@ -60,7 +74,7 @@ object CsvRosterParser {
         if (isHeader) {
             startIndex = 1
             firstTokens.forEachIndexed { idx, token ->
-                val clean = token.lowercase().trim()
+                val clean = cleanToken(token)
                 when {
                     clean == "team" || clean == "time" || clean == "club" || clean == "clube" || clean == "equipe" -> teamCol = idx
                     clean == "name" || clean == "nome" || clean == "player" || clean == "jogador" -> nameCol = idx
@@ -81,15 +95,15 @@ object CsvRosterParser {
             val lineNum = i + 1
 
             val tokens = parseTokens(rawLine, delimiter)
-            val name = tokens.getOrNull(nameCol)?.trim().orEmpty()
-            val team = tokens.getOrNull(teamCol)?.trim().orEmpty()
+            val name = tokens.getOrNull(nameCol)?.let { cleanToken(it) }.orEmpty()
+            val team = tokens.getOrNull(teamCol)?.let { cleanToken(it) }.orEmpty()
 
             if (name.isBlank() || team.isBlank()) {
                 errors.add("Linha $lineNum: Dados incompletos (nome ou time em branco).")
                 continue
             }
 
-            val rawPos = tokens.getOrNull(posCol)?.trim().orEmpty()
+            val rawPos = tokens.getOrNull(posCol)?.let { cleanToken(it) }.orEmpty()
             val pos = parsePosition(rawPos)
             val ovr = tokens.getOrNull(ovrCol)?.toIntOrNull()
 
@@ -102,14 +116,14 @@ object CsvRosterParser {
             // Se a linha contiver mais de 4 colunas (formato estendido)
             if (tokens.size > 4) {
                 heightCm = tokens.getOrNull(heightCol)?.toIntOrNull()
-                preferredFoot = tokens.getOrNull(footCol)?.trim()?.takeIf { it.isNotBlank() }
-                nationality = tokens.getOrNull(natCol)?.trim()?.takeIf { it.isNotBlank() }
+                preferredFoot = tokens.getOrNull(footCol)?.let { cleanToken(it) }?.takeIf { it.isNotBlank() }
+                nationality = tokens.getOrNull(natCol)?.let { cleanToken(it) }?.takeIf { it.isNotBlank() }
                 shirtNumber = tokens.getOrNull(shirtCol)?.toIntOrNull()
 
                 // Se houver colunas de atributos PES6 (26 atributos)
                 if (tokens.size >= attrStartCol + 26) {
                     val attrValues = (0 until 26).map { offset ->
-                        val valStr = tokens.getOrNull(attrStartCol + offset)?.trim().orEmpty()
+                        val valStr = tokens.getOrNull(attrStartCol + offset)?.let { cleanToken(it) }.orEmpty()
                         val num = valStr.toIntOrNull()
                         if (num != null && num in 0..99) num.toString() else ""
                     }
@@ -135,17 +149,36 @@ object CsvRosterParser {
             )
         }
 
-        return CsvParseResult(players = players, errors = errors)
+        val teamCounts = players.groupingBy { it.csvTeam }.eachCount()
+        Log.d(TAG, "PARSE CONCLUIDO: Atletas extraídos=${players.size}, Times identificados=${teamCounts.size}, Erros=${errors.size}")
+
+        return CsvParseResult(
+            players = players,
+            errors = errors,
+            teamPlayerCounts = teamCounts,
+            firstRawLine = firstRawLineFormatted
+        )
+    }
+
+    private fun cleanToken(token: String): String {
+        return token.removePrefix("\uFEFF").removePrefix("\uFFFE").trim().removeSurrounding("\"")
+    }
+
+    private fun formatRawLineForDisplay(line: String): String {
+        return line.take(150)
+            .replace(";", "[PV]")
+            .replace(",", "[VG]")
+            .replace("\t", "[TAB]")
+            .replace("\r", "[CR]")
+            .replace("\n", "[LF]")
     }
 
     private fun parsePosition(rawPos: String): String? {
         if (rawPos.isBlank()) return null
-        // 1. Tentar parse como índice numérico 0-12
         val index = rawPos.toIntOrNull()
         if (index != null && index in POSITION_INDEX_MAP) {
             return POSITION_INDEX_MAP[index]
         }
-        // 2. Tentar parse por texto padrão
         val clean = rawPos.uppercase()
         val validPositions = setOf("GOL", "GK", "ZAG", "CB", "LD", "RB", "LE", "LB", "VOL", "DMF", "MC", "CMF", "MEI", "AMF", "MD", "RMF", "ME", "LMF", "PD", "RWF", "PE", "LWF", "SA", "SS", "CA", "CF")
         if (clean in validPositions) {
@@ -178,13 +211,13 @@ object CsvRosterParser {
             when {
                 c == '"' -> inQuotes = !inQuotes
                 c == delimiter && !inQuotes -> {
-                    tokens.add(sb.toString().trim().removeSurrounding("\""))
+                    tokens.add(cleanToken(sb.toString()))
                     sb.clear()
                 }
                 else -> sb.append(c)
             }
         }
-        tokens.add(sb.toString().trim().removeSurrounding("\""))
+        tokens.add(cleanToken(sb.toString()))
         return tokens
     }
 }

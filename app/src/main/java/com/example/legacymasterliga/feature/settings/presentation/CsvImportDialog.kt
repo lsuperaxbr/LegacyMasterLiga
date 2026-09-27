@@ -133,10 +133,29 @@ fun CsvImportDialog(
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
+
+                            if (!parseResult.firstRawLine.isNullOrBlank()) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                                ) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("Primeira linha lida no arquivo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        Text(parseResult.firstRawLine, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+
                             if (parseResult.errors.isNotEmpty()) {
-                                Text("Motivos do erro / alertas:", fontWeight = FontWeight.SemiBold)
-                                parseResult.errors.forEach { err ->
+                                val displayedErrors = parseResult.errors.take(20)
+                                val remainingCount = parseResult.errors.size - displayedErrors.size
+
+                                Text("Motivos do erro / alertas (${parseResult.errors.size} linhas afetadas):", fontWeight = FontWeight.SemiBold)
+                                displayedErrors.forEach { err ->
                                     Text("• $err", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                }
+                                if (remainingCount > 0) {
+                                    Text("• ... e mais $remainingCount outras linhas com erro.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         } else {
@@ -164,7 +183,7 @@ fun CsvImportDialog(
 
                             csvTeams.forEach { csvTeam ->
                                 val currentMapping = selectedMappings[csvTeam] ?: CsvTeamMapping(csvTeam = csvTeam, ignore = true)
-                                val teamPlayerCount = parseResult.players.count { it.csvTeam == csvTeam }
+                                val teamPlayerCount = parseResult.teamPlayerCounts[csvTeam] ?: 0
 
                                 TeamMappingRow(
                                     csvTeam = csvTeam,
@@ -264,9 +283,15 @@ fun CsvImportDialog(
 
                             if (summary.lineErrors.isNotEmpty()) {
                                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                val displayedSummaryErrors = summary.lineErrors.take(20)
+                                val remainingSummaryErrorsCount = summary.lineErrors.size - displayedSummaryErrors.size
+
                                 Text("Linhas com Alerta/Erro (${summary.lineErrors.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                summary.lineErrors.forEach { err ->
+                                displayedSummaryErrors.forEach { err ->
                                     Text("• $err", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                }
+                                if (remainingSummaryErrorsCount > 0) {
+                                    Text("• ... e mais $remainingSummaryErrorsCount outras linhas com erro.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }

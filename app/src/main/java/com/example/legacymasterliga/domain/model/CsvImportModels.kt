@@ -16,6 +16,8 @@ data class CsvRawPlayer(
 data class CsvParseResult(
     val players: List<CsvRawPlayer>,
     val errors: List<String>,
+    val teamPlayerCounts: Map<String, Int> = emptyMap(),
+    val firstRawLine: String? = null,
 )
 
 data class CsvTeamMapping(
