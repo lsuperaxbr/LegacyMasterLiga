@@ -52,18 +52,33 @@ class CsvRosterParserTest {
     }
 
     @Test
-    fun `parse csv with UTF8 BOM strips BOM and succeeds`() {
-        val bomCsvContent = "\uFEFF" + """
+    fun `csv with blank team imports player into Banco da Liga`() {
+        val csvContent = """
             Nome;Time;Posição;Geral
-            "Lionel Messi";"Barcelona";"PE";93
+            "Agente Livre";"";"MC";80
         """.trimIndent()
 
-        val inputStream = ByteArrayInputStream(bomCsvContent.toByteArray(Charsets.UTF_8))
+        val inputStream = ByteArrayInputStream(csvContent.toByteArray(Charsets.UTF_8))
         val result = CsvRosterParser.parse(inputStream)
 
         assertTrue(result.errors.isEmpty())
         assertEquals(1, result.players.size)
-        assertEquals("Lionel Messi", result.players[0].name)
-        assertEquals("Barcelona", result.players[0].csvTeam)
+        assertEquals("Agente Livre", result.players[0].name)
+        assertEquals("Banco da Liga", result.players[0].csvTeam)
+    }
+
+    @Test
+    fun `csv with blank name discards row and records error`() {
+        val csvContent = """
+            Nome;Time;Posição;Geral
+            "";"Barcelona";"PE";93
+        """.trimIndent()
+
+        val inputStream = ByteArrayInputStream(csvContent.toByteArray(Charsets.UTF_8))
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertEquals(1, result.errors.size)
+        assertTrue(result.players.isEmpty())
+        assertTrue(result.errors[0].contains("nome em branco"))
     }
 }

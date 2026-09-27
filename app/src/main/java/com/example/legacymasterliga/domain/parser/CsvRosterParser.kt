@@ -3,6 +3,7 @@ package com.example.legacymasterliga.domain.parser
 import android.util.Log
 import com.example.legacymasterliga.domain.model.CsvParseResult
 import com.example.legacymasterliga.domain.model.CsvRawPlayer
+import com.example.legacymasterliga.domain.model.InitialDataDefaults
 import java.io.InputStream
 
 object CsvRosterParser {
@@ -98,10 +99,12 @@ object CsvRosterParser {
             val name = tokens.getOrNull(nameCol)?.let { cleanToken(it) }.orEmpty()
             val team = tokens.getOrNull(teamCol)?.let { cleanToken(it) }.orEmpty()
 
-            if (name.isBlank() || team.isBlank()) {
-                errors.add("Linha $lineNum: Dados incompletos (nome ou time em branco).")
+            if (name.isBlank()) {
+                errors.add("Linha $lineNum: Dados incompletos (nome em branco).")
                 continue
             }
+
+            val assignedTeam = if (team.isBlank()) InitialDataDefaults.LEAGUE_BANK_NAME else team
 
             val rawPos = tokens.getOrNull(posCol)?.let { cleanToken(it) }.orEmpty()
             val pos = parsePosition(rawPos)
@@ -137,7 +140,7 @@ object CsvRosterParser {
                 CsvRawPlayer(
                     lineNum = lineNum,
                     name = name,
-                    csvTeam = team,
+                    csvTeam = assignedTeam,
                     position = pos,
                     overall = ovr,
                     heightCm = heightCm,
