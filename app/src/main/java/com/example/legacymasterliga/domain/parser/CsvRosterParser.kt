@@ -67,15 +67,17 @@ object CsvRosterParser {
         // Verificar se a primeira linha é cabeçalho
         val firstTokens = parseTokens(lines[0], delimiter)
         val isHeader = firstTokens.any { token ->
-            val clean = cleanToken(token)
-            clean == "nome" || clean == "name" || clean == "player" ||
-                    clean == "time" || clean == "team" || clean == "club" || clean == "clube" || clean == "equipe"
+            val clean = cleanToken(token).lowercase()
+            clean == "nome" || clean == "name" || clean == "player" || clean == "jogador" ||
+                    clean == "time" || clean == "team" || clean == "club" || clean == "clube" || clean == "equipe" ||
+                    clean == "pos" || clean == "posição" || clean == "posicao" || clean == "position" ||
+                    clean == "ovr" || clean == "overall" || clean == "geral"
         }
 
         if (isHeader) {
             startIndex = 1
             firstTokens.forEachIndexed { idx, token ->
-                val clean = cleanToken(token)
+                val clean = cleanToken(token).lowercase()
                 when {
                     clean == "team" || clean == "time" || clean == "club" || clean == "clube" || clean == "equipe" -> teamCol = idx
                     clean == "name" || clean == "nome" || clean == "player" || clean == "jogador" -> nameCol = idx

@@ -52,6 +52,30 @@ class CsvRosterParserTest {
     }
 
     @Test
+    fun `header line is ignored and players are correctly assigned to team or Banco da Liga`() {
+        val csvContent = """
+            Nome;Time;Posição;Geral
+            "Vinicius Jr";"Real Madrid";"PE";89
+            "Agente Livre";"";"MC";80
+        """.trimIndent()
+
+        val inputStream = ByteArrayInputStream(csvContent.toByteArray(Charsets.UTF_8))
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(2, result.players.size)
+
+        // Confirmar que o cabeçalho "Nome" não virou um jogador
+        assertTrue(result.players.none { it.name.lowercase() == "nome" })
+
+        val vini = result.players.first { it.name == "Vinicius Jr" }
+        assertEquals("Real Madrid", vini.csvTeam)
+
+        val freeAgent = result.players.first { it.name == "Agente Livre" }
+        assertEquals("Banco da Liga", freeAgent.csvTeam)
+    }
+
+    @Test
     fun `csv with blank team imports player into Banco da Liga`() {
         val csvContent = """
             Nome;Time;Posição;Geral
