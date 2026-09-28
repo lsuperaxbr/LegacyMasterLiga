@@ -572,17 +572,22 @@ class OnlineSportsSyncManager @Inject constructor(
             }
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            syncLog( "Falha no upload ${operation.entityType}/${operation.localId}", error)
-            // Firestore transactions fail offline. Keep the operation durable for the next snapshot/auth/network event.
+            syncLog("Falha no upload ${operation.entityType}/${operation.localId}", error)
+            val newAttempts = operation.attempts + 1
+            val newStatus = if (newAttempts >= 3) "QUARANTINED" else "PENDING"
             syncDao.updateQueue(
                 operation.copy(
-                    status = "PENDING",
-                    attempts = operation.attempts + 1,
-                    lastError = error.message,
+                    status = newStatus,
+                    attempts = newAttempts,
+                    lastError = error.message ?: "Falha ao enviar dados",
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
-            syncLog( "Operação ${operation.operationId} mantida na fila", error)
+            if (newStatus == "QUARANTINED") {
+                syncLog("Operação ${operation.operationId} (${operation.entityType}/${operation.localId}) movida para QUARENTENA após $newAttempts falhas", error)
+            } else {
+                syncLog("Operação ${operation.operationId} mantida na fila ($newAttempts/3 tentativas)", error)
+            }
         }
     }
 

@@ -183,4 +183,22 @@ interface OnlineSyncDao {
 
     @Query("DELETE FROM online_sync_queue WHERE entityType = :type AND localId = :localId AND status = 'CONFLICT'")
     suspend fun deleteConflictQueue(type: String, localId: Long)
+
+    @Query("SELECT COUNT(*) FROM online_sync_queue WHERE status = 'QUARANTINED'")
+    fun observeQuarantinedCount(): Flow<Int>
+
+    @Query("SELECT * FROM online_sync_queue WHERE status = 'QUARANTINED' ORDER BY updatedAt DESC")
+    fun observeQuarantinedQueue(): Flow<List<OnlineSyncQueueEntity>>
+
+    @Query("UPDATE online_sync_queue SET status = 'PENDING', attempts = 0, lastError = NULL, updatedAt = :updatedAt WHERE operationId = :operationId")
+    suspend fun retryQuarantined(operationId: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE online_sync_queue SET status = 'PENDING', attempts = 0, lastError = NULL, updatedAt = :updatedAt WHERE status = 'QUARANTINED'")
+    suspend fun retryAllQuarantined(updatedAt: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM online_sync_queue WHERE operationId = :operationId AND status = 'QUARANTINED'")
+    suspend fun discardQuarantined(operationId: String)
+
+    @Query("DELETE FROM online_sync_queue WHERE status = 'QUARANTINED'")
+    suspend fun discardAllQuarantined()
 }
