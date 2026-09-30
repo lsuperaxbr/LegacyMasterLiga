@@ -1,7 +1,9 @@
-# Task List - Correção do Parser CSV
+# Task List - Refazimento do CsvRosterParser
 
-- [x] Checkpoint commit e push das alterações parciais da quarentena
-- [x] Corrigir `isHeader` e mapeamento dinâmico de colunas no `CsvRosterParser.kt` (.lowercase())
-- [x] Atualizar testes unitários em `CsvRosterParserTest.kt`
-- [x] Executar Clean e Rebuild (`app:assembleDebug`)
-- [x] Criar walkthrough e executar commit e push final ("Correção do parser: detecção de cabeçalho e mapeamento de colunas")
+- [/] Commit e push inicial (antes das alterações de código)
+- [ ] Atualizar `CsvRosterParser.kt` para suporte direto ao CSV original do PES 6 Editor (cabeçalho case-insensitive em EN/PT, delimitador automático `,` ou `;`, time em branco -> Banco da Liga)
+- [ ] Atualizar `ImportCsvRostersUseCase.kt` para criação e associação automática de clubes sem depender de mapeamento manual
+- [ ] Simplificar `CsvImportDialog.kt` e `SettingsViewModel.kt` para importação direta em 1 clique
+- [ ] Atualizar e expandir os testes unitários em `CsvRosterParserTest.kt`
+- [ ] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
+- [ ] Criar walkthrough e executar commit e push final no GitHub com a mensagem `"Refazimento do CsvRosterParser: importação direta de CSV do PES 6 e criação automática de clubes"`
