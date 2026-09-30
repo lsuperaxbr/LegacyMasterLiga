@@ -122,6 +122,29 @@ class CsvRosterParserTest {
     }
 
     @Test
+    fun `parse full pes6 roster file from downloads succeeds with exact expected numbers`() {
+        val fullFile = java.io.File("C:\\Users\\luizh\\Downloads\\elencos_legacy_pes6_final.csv")
+        if (!fullFile.exists()) return
+
+        val inputStream = fullFile.inputStream()
+        val result = CsvRosterParser.parse(inputStream)
+
+        // Verificações exatas solicitadas
+        assertEquals(0, result.errors.size)
+        assertEquals(4783, result.players.size)
+        
+        val teams = result.players.map { it.csvTeam }.distinct()
+        assertTrue(teams.size in 120..125) // ~121 times identificados
+        assertTrue(teams.contains("Banco da Liga"))
+
+        // Confirmar que o cabeçalho 'Name' / 'Nome' não foi lido como jogador
+        assertTrue(result.players.none { it.name.lowercase() == "name" || it.name.lowercase() == "nome" })
+
+        // Imprimir no console do teste para confirmação
+        println("TESTE COMPLETO CSV: Atletas extraídos=${result.players.size}, Times identificados=${teams.size}, Erros=${result.errors.size}")
+    }
+
+    @Test
     fun `csv with blank name discards row and records error`() {
         val csvContent = """
             Nome;Time;Posição;Geral
