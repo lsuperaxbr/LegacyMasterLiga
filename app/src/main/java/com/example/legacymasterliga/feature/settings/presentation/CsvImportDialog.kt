@@ -63,23 +63,9 @@ fun CsvImportDialog(
         )
     }
 
-    // Inicializar mapeamentos dos times do CSV
+    // Inicializar lista dos times identificados no CSV
     val csvTeams = remember(parseResult) {
         parseResult.players.map { it.csvTeam }.distinct().sorted()
-    }
-
-    val selectedMappings = remember(csvTeams, clubs) {
-        mutableStateMapOf<String, CsvTeamMapping>().apply {
-            csvTeams.forEach { csvTeam ->
-                val exactMatch = clubs.firstOrNull { it.name.trim().equals(csvTeam.trim(), ignoreCase = true) }
-                if (exactMatch != null) {
-                    put(csvTeam, CsvTeamMapping(csvTeam = csvTeam, targetClubId = exactMatch.id, isConfirmed = true))
-                } else {
-                    // VÍNCULO SEGURO: Padrão "Ignorar este time" para evitar importação errada
-                    put(csvTeam, CsvTeamMapping(csvTeam = csvTeam, ignore = true))
-                }
-            }
-        }
     }
 
     when (step) {
@@ -117,7 +103,7 @@ fun CsvImportDialog(
         CsvImportStep.MAPPING -> {
             AlertDialog(
                 onDismissRequest = onDismiss,
-                title = { Text("Mapeamento de Times do CSV (${csvTeams.size} identificados)") },
+                title = { Text("Importação Direta de Elencos PES 6") },
                 text = {
                     Column(
                         modifier = Modifier
@@ -126,7 +112,7 @@ fun CsvImportDialog(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (csvTeams.isEmpty()) {
+                        if (parseResult.players.isEmpty()) {
                             Text(
                                 "Nenhum time ou atleta válido pôde ser extraído do arquivo selecionado.",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -159,55 +145,39 @@ fun CsvImportDialog(
                                 }
                             }
                         } else {
+                            val bankCount = parseResult.teamPlayerCounts["Banco da Liga"] ?: 0
+                            val clubTeams = csvTeams.filterNot { it.equals("Banco da Liga", ignoreCase = true) }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Resumo do Processamento do Arquivo:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text("• Total de Atletas Extraídos: ${parseResult.players.size}", style = MaterialTheme.typography.bodyMedium)
+                                    Text("• Clubes Identificados (${clubTeams.size}): ${clubTeams.take(8).joinToString(", ")}${if (clubTeams.size > 8) "..." else ""}", style = MaterialTheme.typography.bodyMedium)
+                                    if (bankCount > 0) {
+                                        Text("• Atletas sem time (Banco da Liga): $bankCount", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+
                             Text(
-                                "Vincule cada time do CSV ao clube correspondente da liga. Times sem correspondência ficam como 'Ignorar este time' por padrão.",
+                                "O sistema criará/associará automaticamente todos os clubes identificados e importará os atletas de forma direta, sem necessidade de intervenção manual.",
                                 style = MaterialTheme.typography.bodySmall
                             )
-
-                            // Ação em Lote: Marcar todos os não vinculados como "Criar clube novo"
-                            OutlinedButton(
-                                onClick = {
-                                    csvTeams.forEach { csvTeam ->
-                                        val current = selectedMappings[csvTeam]
-                                        if (current == null || current.ignore) {
-                                            selectedMappings[csvTeam] = CsvTeamMapping(csvTeam = csvTeam, createNewClub = true)
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Criar clube novo para não vinculados")
-                            }
-
-                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
-
-                            csvTeams.forEach { csvTeam ->
-                                val currentMapping = selectedMappings[csvTeam] ?: CsvTeamMapping(csvTeam = csvTeam, ignore = true)
-                                val teamPlayerCount = parseResult.teamPlayerCounts[csvTeam] ?: 0
-
-                                TeamMappingRow(
-                                    csvTeam = csvTeam,
-                                    playerCount = teamPlayerCount,
-                                    currentMapping = currentMapping,
-                                    clubs = clubs,
-                                    onMappingChanged = { updated ->
-                                        selectedMappings[csvTeam] = updated
-                                    }
-                                )
-                            }
                         }
                     }
                 },
                 confirmButton = {
-                    val activeImportsCount = selectedMappings.values.filter { !it.ignore && (it.targetClubId != null || it.isBank || it.createNewClub) }.size
                     Button(
                         onClick = {
                             step = CsvImportStep.PROGRESS
-                            onConfirmImport(selectedMappings.values.toList())
+                            onConfirmImport(emptyList())
                         },
-                        enabled = activeImportsCount > 0
+                        enabled = parseResult.players.isNotEmpty()
                     ) {
-                        Text("Importar $activeImportsCount Times")
+                        Text("Confirmar Importação de ${parseResult.players.size} Atletas")
                     }
                 },
                 dismissButton = {
@@ -301,87 +271,6 @@ fun CsvImportDialog(
                     Button(onClick = onDismiss) { Text("Concluir") }
                 }
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TeamMappingRow(
-    csvTeam: String,
-    playerCount: Int,
-    currentMapping: CsvTeamMapping,
-    clubs: List<Club>,
-    onMappingChanged: (CsvTeamMapping) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    val displayText = when {
-        currentMapping.createNewClub -> "Criar clube novo ('$csvTeam')"
-        currentMapping.isBank -> "Banco da Liga"
-        currentMapping.targetClubId != null -> clubs.firstOrNull { it.id == currentMapping.targetClubId }?.name ?: "Clube Selecionado"
-        currentMapping.ignore -> "Ignorar este time"
-        else -> "Ignorar este time"
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("$csvTeam ($playerCount atletas)", fontWeight = FontWeight.Bold)
-
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded }
-            ) {
-                OutlinedTextField(
-                    value = displayText,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Destino no App") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    singleLine = true
-                )
-
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Ignorar este time") },
-                        onClick = {
-                            onMappingChanged(CsvTeamMapping(csvTeam = csvTeam, ignore = true))
-                            expanded = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Criar clube novo ('$csvTeam')") },
-                        onClick = {
-                            onMappingChanged(CsvTeamMapping(csvTeam = csvTeam, createNewClub = true))
-                            expanded = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Banco da Liga") },
-                        onClick = {
-                            onMappingChanged(CsvTeamMapping(csvTeam = csvTeam, isBank = true))
-                            expanded = false
-                        }
-                    )
-                    HorizontalDivider()
-                    clubs.filter { !it.isBank }.forEach { club ->
-                        DropdownMenuItem(
-                            text = { Text(club.name) },
-                            onClick = {
-                                onMappingChanged(CsvTeamMapping(csvTeam = csvTeam, targetClubId = club.id))
-                                expanded = false
-                            }
-                        )
-                    }
-                }
-            }
         }
     }
 }

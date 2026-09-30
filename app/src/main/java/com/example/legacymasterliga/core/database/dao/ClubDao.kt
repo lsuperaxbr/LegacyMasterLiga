@@ -52,6 +52,9 @@ interface ClubDao {
     @Query("SELECT * FROM clubs WHERE leagueId = :leagueId AND isBank = 1 LIMIT 1")
     suspend fun findBankByLeague(leagueId: Long): ClubEntity?
 
+    @Query("SELECT * FROM clubs WHERE leagueId = :leagueId")
+    suspend fun findAllByLeague(leagueId: Long): List<ClubEntity>
+
     @Query("SELECT * FROM clubs WHERE presidentUserId = :userId AND isBank = 0 LIMIT 1")
     fun observeByPresident(userId: Long): Flow<ClubEntity?>
 

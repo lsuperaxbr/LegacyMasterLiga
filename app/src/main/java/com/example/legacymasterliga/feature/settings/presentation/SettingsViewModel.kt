@@ -222,17 +222,26 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun confirmCsvImport(mappings: List<CsvTeamMapping>) = viewModelScope.launch {
+    fun confirmCsvImport(mappings: List<CsvTeamMapping> = emptyList()) = viewModelScope.launch {
         val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id ?: return@launch
         val parsed = csvParseResult.value ?: return@launch
 
-        val summary = importCsvRostersUseCase(
-            leagueId = leagueId,
-            mappings = mappings,
-            players = parsed.players,
-            parseErrors = parsed.errors,
-            onProgress = { p -> csvImportProgress.value = p }
-        )
+        val summary = if (mappings.isEmpty()) {
+            importCsvRostersUseCase(
+                leagueId = leagueId,
+                players = parsed.players,
+                parseErrors = parsed.errors,
+                onProgress = { p -> csvImportProgress.value = p }
+            )
+        } else {
+            importCsvRostersUseCase(
+                leagueId = leagueId,
+                mappings = mappings,
+                players = parsed.players,
+                parseErrors = parsed.errors,
+                onProgress = { p -> csvImportProgress.value = p }
+            )
+        }
 
         csvImportSummary.value = summary
     }

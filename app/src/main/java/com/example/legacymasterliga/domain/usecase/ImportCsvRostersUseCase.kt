@@ -11,6 +11,7 @@ import com.example.legacymasterliga.domain.model.CsvImportProgress
 import com.example.legacymasterliga.domain.model.CsvImportSummary
 import com.example.legacymasterliga.domain.model.CsvRawPlayer
 import com.example.legacymasterliga.domain.model.CsvTeamMapping
+import com.example.legacymasterliga.domain.model.InitialDataDefaults
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,34 @@ class ImportCsvRostersUseCase @Inject constructor(
     private val clubDao: ClubDao,
     private val playerDao: PlayerDao,
 ) {
+    suspend operator fun invoke(
+        leagueId: Long,
+        players: List<CsvRawPlayer>,
+        parseErrors: List<String>,
+        onProgress: (CsvImportProgress) -> Unit = {}
+    ): CsvImportSummary = withContext(Dispatchers.IO) {
+        val existingClubs = clubDao.findAllByLeague(leagueId)
+        val distinctTeams = players.map { it.csvTeam }.distinct()
+
+        val autoMappings = distinctTeams.map { team ->
+            when {
+                team.equals(InitialDataDefaults.LEAGUE_BANK_NAME, ignoreCase = true) || team.equals("Banco da Liga", ignoreCase = true) -> {
+                    CsvTeamMapping(csvTeam = team, isBank = true)
+                }
+                else -> {
+                    val existing = existingClubs.find { it.name.trim().equals(team.trim(), ignoreCase = true) }
+                    if (existing != null) {
+                        CsvTeamMapping(csvTeam = team, targetClubId = existing.id)
+                    } else {
+                        CsvTeamMapping(csvTeam = team, createNewClub = true)
+                    }
+                }
+            }
+        }
+
+        return@withContext invoke(leagueId, autoMappings, players, parseErrors, onProgress)
+    }
+
     suspend operator fun invoke(
         leagueId: Long,
         mappings: List<CsvTeamMapping>,

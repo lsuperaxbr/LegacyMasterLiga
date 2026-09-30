@@ -52,6 +52,36 @@ class CsvRosterParserTest {
     }
 
     @Test
+    fun `parse original pes6 editor csv with comma delimiter and english headers succeeds`() {
+        val pes6CsvContent = """
+            Name,Team,Pos,OVR,Height,Foot,Nation,Shirt,ATTACK,DEFENCE,BALANCE,STAMINA,SPEED,ACCELERATION,RESPONSE,AGILITY,DRIBBLE ACCURACY,DRIBBLE SPEED,SHORT PASS ACCURACY,SHORT PASS SPEED,LONG PASS ACCURACY,LONG PASS SPEED,SHOT ACCURACY,SHOT POWER,SHOT TECHNIQUE,FREE KICK ACCURACY,SWERVE,HEADING,JUMP,TEAM WORK,TECHNIQUE,AGGRESSION,MENTALITY,GK SKILLS
+            "Kylian Mbappé","Real Madrid","CF",91,178,"Right","France",9,92,38,80,88,97,97,88,94,92,95,82,80,78,76,89,88,86,74,78,72,78,82,90,88,82,50
+            "Jude Bellingham","Real Madrid","AMF",90,186,"Right","England",5,86,75,86,92,84,82,88,84,88,84,89,86,88,84,84,82,82,78,80,82,84,90,88,86,88,50
+            "Jogador Sem Clube","","CMF",75,180,"Left","Brazil",10,70,60,70,75,75,75,70,70,70,70,72,70,70,70,70,70,70,65,65,65,65,70,70,65,70,50
+        """.trimIndent()
+
+        val inputStream = ByteArrayInputStream(pes6CsvContent.toByteArray(Charsets.UTF_8))
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(3, result.players.size)
+
+        // Verificar o cabeçalho 'Name' não virou jogador
+        assertTrue(result.players.none { it.name.lowercase() == "name" })
+
+        val mbappe = result.players.first { it.name == "Kylian Mbappé" }
+        assertEquals("Real Madrid", mbappe.csvTeam)
+        assertEquals("CA", mbappe.position) // AMF -> MEI / CF -> CA
+        assertEquals(91, mbappe.overall)
+        assertEquals(178, mbappe.heightCm)
+        assertEquals("Right", mbappe.preferredFoot)
+        assertEquals("France", mbappe.nationality)
+
+        val freeAgent = result.players.first { it.name == "Jogador Sem Clube" }
+        assertEquals("Banco da Liga", freeAgent.csvTeam)
+    }
+
+    @Test
     fun `header line is ignored and players are correctly assigned to team or Banco da Liga`() {
         val csvContent = """
             Nome;Time;Posição;Geral
