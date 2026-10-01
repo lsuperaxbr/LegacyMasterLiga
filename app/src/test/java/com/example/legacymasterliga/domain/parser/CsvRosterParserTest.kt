@@ -140,6 +140,11 @@ class CsvRosterParserTest {
         // Confirmar que o cabeçalho 'Name' / 'Nome' não foi lido como jogador
         assertTrue(result.players.none { it.name.lowercase() == "name" || it.name.lowercase() == "nome" })
 
+        // Confirmar que NENHUM jogador tem o nome grudado com time, posição ou vírgula/ponto-e-vírgula
+        result.players.take(100).forEach { player ->
+            assertTrue("Nome de jogador inválido ou concatenado: ${player.name}", !player.name.contains(",") && !player.name.contains(";"))
+        }
+
         // Imprimir no console do teste para confirmação
         println("TESTE COMPLETO CSV: Atletas extraídos=${result.players.size}, Times identificados=${teams.size}, Erros=${result.errors.size}")
     }

@@ -43,10 +43,12 @@ object CsvRosterParser {
             Log.d(TAG, "Linha Bruta ${index + 1}: ${formatRawLineForDisplay(line)}")
         }
 
-        // Detectar delimitador predominantemente usado (, ou ;)
-        val sampleText = lines.take(10).joinToString("\n")
-        val semicolonCount = sampleText.count { it == ';' }
-        val commaCount = sampleText.count { it == ',' }
+        // Detectar delimitador na primeira linha não-vazia (remover BOM e trim)
+        val firstNonEmptyLine = lines.firstOrNull { cleanToken(it).isNotBlank() }
+            ?.let { cleanToken(it) }.orEmpty()
+
+        val commaCount = firstNonEmptyLine.count { it == ',' }
+        val semicolonCount = firstNonEmptyLine.count { it == ';' }
         val delimiter = if (semicolonCount > commaCount) ';' else ','
 
         val players = mutableListOf<CsvRawPlayer>()
@@ -98,6 +100,11 @@ object CsvRosterParser {
             val lineNum = i + 1
 
             val tokens = parseTokens(rawLine, delimiter)
+            if (tokens.size < 2) {
+                errors.add("Linha $lineNum: Formato inválido ou colunas insuficientes (apenas 1 coluna encontrada).")
+                continue
+            }
+
             val name = tokens.getOrNull(nameCol)?.let { cleanToken(it) }.orEmpty()
             val team = tokens.getOrNull(teamCol)?.let { cleanToken(it) }.orEmpty()
 
