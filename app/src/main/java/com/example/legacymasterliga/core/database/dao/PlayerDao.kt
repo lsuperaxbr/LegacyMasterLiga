@@ -33,6 +33,9 @@ interface PlayerDao {
     @Query("SELECT * FROM players WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): PlayerEntity?
 
+    @Query("SELECT * FROM players WHERE clubId = :clubId AND isActive = 1 ORDER BY name COLLATE NOCASE")
+    suspend fun findActiveByClub(clubId: Long): List<PlayerEntity>
+
     @Query("SELECT * FROM players WHERE clubId = :clubId AND name = :name COLLATE NOCASE LIMIT 1")
     suspend fun findByNameAndClub(clubId: Long, name: String): PlayerEntity?
 

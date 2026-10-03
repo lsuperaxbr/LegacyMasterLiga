@@ -1,60 +1,46 @@
-# Walkthrough - Correção Definitiva do CsvRosterParser
+# Walkthrough - Exportação de Elencos PLVR (TXT por Jogador) & Remoção do Leitor CSV
 
-Concluída a reformulação e fortalecimento do `CsvRosterParser` no aplicativo **Legacy Master Liga**. O parser agora possui proteção contra planilhas Excel XLSX renomeadas, suporte a múltiplos encodimentos, detecção dinâmica de delimitadores e normalização NFD de cabeçalhos acentuados.
+Concluída a implementação do módulo de exportação de elencos em **arquivos `.txt` individuais por jogador** (padrão PLVR para PES 6) salvos na estrutura de pastas por clube em `Download/LegacyMasterLiga/`, além da **remoção integral e higienização do leitor legado de planilhas CSV**.
 
 ---
 
 ## O Que Foi Implementado
 
-### 1. Proteção Contra Planilhas XLSX Renomeadas (`CsvRosterParser.kt`)
-- Inspeciona os primeiros bytes do arquivo antes da leitura do texto.
-- Se identificar a assinatura `PK\x03\x04` (magic byte `0x50 0x4B` de arquivos Zip/XLSX), rejeita o arquivo imediatamente emitindo o erro:
-  `"Arquivo inválido. Envie um CSV de texto, não uma planilha Excel renomeada."`
+### 1. Novo Módulo de Exportação PLVR (`ExportPes6PlvrUseCase.kt`)
+- **Arquivos `.txt` Individuais por Atleta:** Cada jogador tem seu próprio arquivo de texto nomeado com o nome do jogador sanitizado (sem acentos NFD):
+  - `Download/LegacyMasterLiga/Manchester_United/Cristiano_Ronaldo.txt`
+  - `Download/LegacyMasterLiga/Banco_da_Liga/Jogador_Livre.txt`
+- **Proibidos Delimitadores `[PLAYER]`:** Os arquivos do jogador **não possuem cabeçalho/delimitador de bloco `[PLAYER]`**, contendo puramente as linhas de chave-valor em UTF-8 sem BOM.
+- **Mapeamento Oficial dos 26 Atributos PES 6:** Todos os 26 atributos numéricos do banco de dados são exportados na ordem exata:
+  `Attack`, `Defence`, `Balance`, `Stamina`, `Speed`, `Acceleration`, `Response`, `Agility`, `Dribble_Accuracy`, `Dribble_Speed`, `Short_Pass_Accuracy`, `Short_Pass_Speed`, `Long_Pass_Accuracy`, `Long_Pass_Speed`, `Shot_Accuracy`, `Shot_Power`, `Shot_Technique`, `Free_Kick_Accuracy`, `Swerve`, `Heading`, `Jump`, `Team_Work`, `Technique`, `Aggression`, `Mentality`, `GK_Skills`.
+- **Preservação de `Height:` e `Foot:`:** Se o jogador tiver altura ou pé nulo/em branco no app, a linha correspondente é **mantida e gravada como `Height:` ou `Foot:`** (com o valor em branco após os dois-pontos, nunca omitindo a linha do campo).
 
 ---
 
-### 2. Leitura com Fallback de Encoding e Remoção de BOM
-- Tenta decodificar o arquivo em `UTF-8`.
-- Se falhar por sequências inválidas (ex: Ansi/Windows-1252 exportado no Windows), aplica fallback automático para `Windows-1252` (`ISO-8859-1`).
-- Higieniza marcas BOM (`\uFEFF`, `\uFFFE`) no início do arquivo.
+### 2. Remoção Integral do Leitor Legado de CSV (Seção 12)
+- **Descontinuação Completa:**
+  - Deletados os arquivos `CsvRosterParser.kt`, `ImportCsvRostersUseCase.kt`, `CsvImportModels.kt`, `CsvImportDialog.kt` e `CsvRosterParserTest.kt`.
+- **Higienização de Telas e ViewModel:**
+  - Removido o card/botão de importação CSV e seletores de arquivos de `SettingsScreen.kt` e `SettingsViewModel.kt`.
+  - Auditagem concluída para garantir ausência de dead clicks, botões sem ação ou menus órfãos.
+- **Preservação do Banco de Dados:** Todos os dados locais de clubes e jogadores já cadastrados no Room/SQLite permanecem intactos.
 
 ---
 
-### 3. Detecção do Delimitador
-- Inspeciona a primeira linha não-vazia e conta as frequências dos delimitadores candidatos: `,`, `;`, `\t` e `|`.
-- Seleciona o delimitador que possuir a maior frequência de ocorrências.
-- Em caso de empate, aplica a ordem estrita de prioridade: `,` > `;` > `\t` > `|`.
+### 3. Interface de Exportação (`SettingsScreen.kt`)
+- Adicionado o botão `"Exportar Elencos (Pastas e TXT)"`.
+- Diálogo de confirmação com opção de checkbox: `"Recriar pastas do zero (Limpeza Total)"` para apagar pastas órfãs de clubes ou jogadores excluídos antes de recriar a estrutura de diretórios.
+- Diálogo de progresso e resumo final da operação.
 
 ---
 
-### 4. Normalização NFD de Cabeçalhos
-- Aplica `Normalizer.Form.NFD` para remover acentos dos títulos do cabeçalho.
-- Mapeia as colunas de forma totalmente case-insensitive e sem acentuação (`Name`/`Nome`, `Team`/`Time`, `Pos`/`Posição`, `OVR`/`Geral`).
+## Testes Automatizados (`ExportPes6PlvrUseCaseTest.kt`)
 
----
-
-### 5. Validação por Linha
-- Se a divisão de uma linha resultar em apenas 1 coluna, registra erro de coluna insuficiente.
-- Se o campo `name` estiver em branco, ignora a linha e registra erro.
-- Se o campo `csvTeam` estiver em branco, atribui o atleta automaticamente ao `"Banco da Liga"`.
-
----
-
-## Testes Unitários Implementados (`CsvRosterParserTest.kt`)
-
-1. **CSV com vírgula (`,`):** Valida a separação limpa das colunas.
-2. **CSV com ponto-e-vírgula (`;`):** Valida a separação limpa das colunas.
-3. **CSV com TAB (`\t`):** Valida a separação limpa das colunas com delimitador de tabulação.
-4. **CSV com BOM (`\uFEFF` / `\uFFFE`):** Valida o descarte da marca de ordem de byte.
-5. **XLSX Renomeado:** Simula magic byte `PK` e confirma a rejeição amigável.
-6. **Jogador Sem Time:** Confirma o direcionamento automático para o Banco da Liga.
-7. **Teste de Carga Completo (`elencos_legacy_pes6_final.csv`):**
-   - **Atletas extraídos:** `4.783`
-   - **Times identificados / criados:** `121` (~121 clubes + Banco da Liga)
-   - **Erros:** `0`
-   - **Nomes limpos:** NENHUM atleta possui time, posição ou OVR grudado no nome.
+- **Validação de Sanitização:** Confirma que `"São Paulo"` vira `"Sao_Paulo"` e `"Cristiano Ronaldo!"` vira `"Cristiano_Ronaldo"`.
+- **Validação de Formato PLVR sem `[PLAYER]`:** Garante ausência da tag `[PLAYER]` e presença dos 26 atributos PES 6.
+- **Validação de `Height:` e `Foot:` Nulos:** Confirma que ao passar valores nulos, as linhas `Height:` e `Foot:` permanecem presentes com valor em branco após os dois-pontos.
 
 ---
 
 ## Resultados da Verificação e Build
-- **Build:** `clean app:assembleDebug` executado com sucesso (0 erros).
+- **Build:** `clean app:assembleDebug` executado com sucesso (0 erros de compilação).

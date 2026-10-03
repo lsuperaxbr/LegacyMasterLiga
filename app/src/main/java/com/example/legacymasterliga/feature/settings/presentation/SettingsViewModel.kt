@@ -7,18 +7,14 @@ import com.example.legacymasterliga.core.model.DensityPreference
 import com.example.legacymasterliga.core.model.ThemePreference
 import com.example.legacymasterliga.core.model.TieBreakCriterion
 import com.example.legacymasterliga.domain.model.Club
-import com.example.legacymasterliga.domain.model.CsvImportProgress
-import com.example.legacymasterliga.domain.model.CsvImportSummary
-import com.example.legacymasterliga.domain.model.CsvParseResult
-import com.example.legacymasterliga.domain.model.CsvTeamMapping
 import com.example.legacymasterliga.domain.model.League
 import com.example.legacymasterliga.domain.model.User
-import com.example.legacymasterliga.domain.parser.CsvRosterParser
 import com.example.legacymasterliga.domain.repository.AuthRepository
 import com.example.legacymasterliga.domain.repository.ClubRepository
 import com.example.legacymasterliga.domain.usecase.DeleteLeagueResult
 import com.example.legacymasterliga.domain.usecase.DeleteLeagueUseCase
-import com.example.legacymasterliga.domain.usecase.ImportCsvRostersUseCase
+import com.example.legacymasterliga.domain.usecase.ExportPes6PlvrUseCase
+import com.example.legacymasterliga.domain.usecase.ExportPes6Summary
 import com.example.legacymasterliga.domain.usecase.PurgeGhostResult
 import com.example.legacymasterliga.domain.usecase.ResetLeagueResult
 import com.example.legacymasterliga.domain.usecase.ResetLeagueUseCase
@@ -28,9 +24,7 @@ import com.example.legacymasterliga.feature.settings.domain.CompetitionOption
 import com.example.legacymasterliga.feature.settings.domain.CompetitionRules
 import com.example.legacymasterliga.feature.settings.domain.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.io.InputStream
 import javax.inject.Inject
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,7 +34,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private data class SettingsBase(
     val preferences: AppPreferences,
@@ -60,16 +53,14 @@ class SettingsViewModel @Inject constructor(
     private val financeRepository: FinanceRepository,
     private val resetLeagueUseCase: ResetLeagueUseCase,
     private val deleteLeagueUseCase: DeleteLeagueUseCase,
-    private val importCsvRostersUseCase: ImportCsvRostersUseCase,
+    private val exportPes6PlvrUseCase: ExportPes6PlvrUseCase,
 ) : ViewModel() {
     private val selectedLeagueId = MutableStateFlow<Long?>(null)
     private val selectedCompetitionId = MutableStateFlow<Long?>(null)
     private val message = MutableStateFlow<String?>(null)
 
-    val csvParseResult = MutableStateFlow<CsvParseResult?>(null)
-    val csvExistingPlayerCount = MutableStateFlow(0)
-    val csvImportProgress = MutableStateFlow<CsvImportProgress?>(null)
-    val csvImportSummary = MutableStateFlow<CsvImportSummary?>(null)
+    val exportSummary = MutableStateFlow<ExportPes6Summary?>(null)
+    val isExporting = MutableStateFlow(false)
     val purgeGhostResult = MutableStateFlow<PurgeGhostResult?>(null)
 
     private val leagues = repository.observeLeagues()
@@ -188,69 +179,26 @@ class SettingsViewModel @Inject constructor(
             }
     }
 
-    fun parseCsvUri(contentResolver: android.content.ContentResolver, uri: android.net.Uri) = viewModelScope.launch(Dispatchers.IO) {
+    fun exportPlvr(cleanExport: Boolean = false) = viewModelScope.launch {
         val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id
         if (leagueId == null) {
-            withContext(Dispatchers.Main) {
-                message.value = "Selecione uma liga antes de importar."
-            }
+            message.value = "Selecione uma liga primeiro."
             return@launch
         }
-
-        try {
-            val result = contentResolver.openInputStream(uri)?.use { stream ->
-                CsvRosterParser.parse(stream)
-            } ?: CsvParseResult(emptyList(), listOf("Não foi possível abrir o arquivo selecionado."))
-
-            var count = 0
-            database.query("SELECT COUNT(*) FROM players WHERE leagueId = ?", arrayOf(leagueId.toString())).use { cursor ->
-                if (cursor.moveToFirst()) count = cursor.getInt(0)
+        isExporting.value = true
+        exportPes6PlvrUseCase(leagueId, cleanExport)
+            .onSuccess { summary ->
+                exportSummary.value = summary
+                message.value = "Exportação concluída com sucesso! Arquivos salvos em Download/LegacyMasterLiga"
             }
-
-            val teams = result.players.map { it.csvTeam }.distinct()
-            android.util.Log.d("CsvRosterParser", "Atletas extraídos: ${result.players.size}, Times identificados (${teams.size}): $teams")
-
-            withContext(Dispatchers.Main) {
-                csvExistingPlayerCount.value = count
-                csvParseResult.value = result
+            .onFailure { error ->
+                message.value = "Falha ao exportar elencos: ${error.message}"
             }
-        } catch (e: Exception) {
-            android.util.Log.e("CsvRosterParser", "Erro de leitura do arquivo CSV", e)
-            withContext(Dispatchers.Main) {
-                csvParseResult.value = CsvParseResult(emptyList(), listOf("Erro de leitura do arquivo CSV: ${e.message}"))
-            }
-        }
+        isExporting.value = false
     }
 
-    fun confirmCsvImport(mappings: List<CsvTeamMapping> = emptyList()) = viewModelScope.launch {
-        val leagueId = selectedLeagueId.value ?: uiState.value.leagues.firstOrNull()?.id ?: return@launch
-        val parsed = csvParseResult.value ?: return@launch
-
-        val summary = if (mappings.isEmpty()) {
-            importCsvRostersUseCase(
-                leagueId = leagueId,
-                players = parsed.players,
-                parseErrors = parsed.errors,
-                onProgress = { p -> csvImportProgress.value = p }
-            )
-        } else {
-            importCsvRostersUseCase(
-                leagueId = leagueId,
-                mappings = mappings,
-                players = parsed.players,
-                parseErrors = parsed.errors,
-                onProgress = { p -> csvImportProgress.value = p }
-            )
-        }
-
-        csvImportSummary.value = summary
-    }
-
-    fun dismissCsvImport() {
-        csvParseResult.value = null
-        csvExistingPlayerCount.value = 0
-        csvImportProgress.value = null
-        csvImportSummary.value = null
+    fun dismissExportSummary() {
+        exportSummary.value = null
     }
 
     fun clearMessage() { message.value = null }

@@ -1,8 +1,5 @@
 package com.example.legacymasterliga.feature.settings.presentation
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +16,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -40,8 +39,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -50,12 +49,8 @@ import com.example.legacymasterliga.core.model.DensityPreference
 import com.example.legacymasterliga.core.model.ThemePreference
 import com.example.legacymasterliga.core.model.TieBreakCriterion
 import com.example.legacymasterliga.core.model.UserRole
-import com.example.legacymasterliga.domain.model.CsvImportProgress
-import com.example.legacymasterliga.domain.model.CsvImportSummary
-import com.example.legacymasterliga.domain.model.CsvParseResult
-import com.example.legacymasterliga.domain.model.CsvTeamMapping
 import com.example.legacymasterliga.domain.model.League
-import java.io.InputStream
+import com.example.legacymasterliga.domain.usecase.ExportPes6Summary
 
 @Composable
 fun SettingsRoute(
@@ -63,12 +58,9 @@ fun SettingsRoute(
     onNavigateToDiagnostic: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val csvParseResult by viewModel.csvParseResult.collectAsStateWithLifecycle()
-    val csvExistingPlayerCount by viewModel.csvExistingPlayerCount.collectAsStateWithLifecycle()
-    val csvImportProgress by viewModel.csvImportProgress.collectAsStateWithLifecycle()
-    val csvImportSummary by viewModel.csvImportSummary.collectAsStateWithLifecycle()
+    val exportSummary by viewModel.exportSummary.collectAsStateWithLifecycle()
+    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
 
     SettingsScreen(
         state = state,
@@ -82,13 +74,10 @@ fun SettingsRoute(
         onResetLeague = viewModel::resetLeague,
         onDeleteLeague = viewModel::deleteLeague,
         onPurgeGhostLeague = viewModel::purgeGhostLeague,
-        csvParseResult = csvParseResult,
-        csvExistingPlayerCount = csvExistingPlayerCount,
-        csvImportProgress = csvImportProgress,
-        csvImportSummary = csvImportSummary,
-        onImportCsvUri = { uri -> viewModel.parseCsvUri(context.contentResolver, uri) },
-        onConfirmCsvImport = viewModel::confirmCsvImport,
-        onDismissCsvImport = viewModel::dismissCsvImport,
+        exportSummary = exportSummary,
+        isExporting = isExporting,
+        onExportPlvr = viewModel::exportPlvr,
+        onDismissExportSummary = viewModel::dismissExportSummary,
         onOpenSyncDiagnostic = onNavigateToDiagnostic
     )
 }
@@ -107,16 +96,12 @@ fun SettingsScreen(
     onResetLeague: () -> Unit = {},
     onDeleteLeague: (Long) -> Unit = {},
     onPurgeGhostLeague: () -> Unit = {},
-    csvParseResult: CsvParseResult? = null,
-    csvExistingPlayerCount: Int = 0,
-    csvImportProgress: CsvImportProgress? = null,
-    csvImportSummary: CsvImportSummary? = null,
-    onImportCsvUri: (Uri) -> Unit = {},
-    onConfirmCsvImport: (List<CsvTeamMapping>) -> Unit = {},
-    onDismissCsvImport: () -> Unit = {},
+    exportSummary: ExportPes6Summary? = null,
+    isExporting: Boolean = false,
+    onExportPlvr: (Boolean) -> Unit = {},
+    onDismissExportSummary: () -> Unit = {},
     onOpenSyncDiagnostic: () -> Unit = {}
 ) {
-    val context = LocalContext.current
     var leagueName by remember { mutableStateOf("") }
     var bankInjection by remember { mutableStateOf("") }
     var theme by remember { mutableStateOf(state.preferences.themePreference) }
@@ -133,15 +118,9 @@ fun SettingsScreen(
     var showCloudDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showDeleteLeagueDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var cleanExportInput by remember { mutableStateOf(false) }
     var resetConfirmInput by remember { mutableStateOf("") }
-
-    val csvLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { selectedUri ->
-            onImportCsvUri(selectedUri)
-        }
-    }
 
     val selectedLeague = state.leagues.firstOrNull { it.id == state.selectedLeagueId }
     LaunchedEffect(selectedLeague?.id, selectedLeague?.name) { leagueName = selectedLeague?.name.orEmpty() }
@@ -160,6 +139,94 @@ fun SettingsScreen(
             criteria = it.tieBreakCriteria
             highlightLeader = it.highlightLeader
         }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text("Exportar Elencos (Pastas e TXT)") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Esta ação criará uma estrutura de pastas por clube em 'Download/LegacyMasterLiga/' " +
+                        "com arquivos .txt individuais para cada jogador no padrão PLVR do PES 6 Editor.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = cleanExportInput,
+                            onCheckedChange = { cleanExportInput = it }
+                        )
+                        Text(
+                            "Recriar pastas do zero (Limpeza Total)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExportDialog = false
+                        onExportPlvr(cleanExportInput)
+                    }
+                ) {
+                    Text("Iniciar Exportação")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (isExporting) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Exportando Elencos...") },
+            text = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text("Gerando pastas e arquivos .txt por jogador...")
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (exportSummary != null) {
+        AlertDialog(
+            onDismissRequest = onDismissExportSummary,
+            title = { Text("Exportação Concluída") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("• Clubes exportados: ${exportSummary.totalClubsExported}", style = MaterialTheme.typography.bodyMedium)
+                    Text("• Atletas exportados: ${exportSummary.totalPlayersExported}", style = MaterialTheme.typography.bodyMedium)
+                    if (exportSummary.isCleanedFirst) {
+                        Text("• Pastas anteriores recriadas do zero.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    Text("Caminho: ${exportSummary.exportPath}", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                Button(onClick = onDismissExportSummary) {
+                    Text("Concluir")
+                }
+            }
+        )
     }
 
     if (showResetDialog) {
@@ -305,14 +372,15 @@ fun SettingsScreen(
                     Text("Moeda oficial: CR", style = MaterialTheme.typography.bodySmall)
                 }
 
-                SettingsCard("Importação de Elencos") {
-                    Text("Carga em Lote de Atletas (CSV)", fontWeight = FontWeight.SemiBold)
-                    Text("Importe elencos do PES Editor 6 / Option File com vínculo de times para os clubes da liga.", style = MaterialTheme.typography.bodySmall)
+                SettingsCard("Exportação de Elencos PLVR (PES 6)") {
+                    Text("Geração de Pastas e TXT por Jogador", fontWeight = FontWeight.SemiBold)
+                    Text("Gera automaticamente a estrutura de pastas por clube em 'Download/LegacyMasterLiga/' com arquivos .txt individuais por atleta compatíveis com o PES 6 Editor.", style = MaterialTheme.typography.bodySmall)
                     Button(
-                        onClick = { csvLauncher.launch("*/*") },
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = { showExportDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = state.selectedLeagueId != null
                     ) {
-                        Text("Importar elencos (CSV)")
+                        Text("Exportar Elencos (Pastas e TXT)")
                     }
                 }
 
@@ -457,19 +525,6 @@ fun SettingsScreen(
                 }
             }
         }
-    }
-
-    if (csvParseResult != null) {
-        CsvImportDialog(
-            parseResult = csvParseResult,
-            existingPlayerCount = csvExistingPlayerCount,
-            clubs = state.clubs,
-            progress = csvImportProgress,
-            summary = csvImportSummary,
-            onDismiss = onDismissCsvImport,
-            onConfirmImport = onConfirmCsvImport,
-            onRequestReset = { showResetDialog = true }
-        )
     }
 
     if (showOnlineDialog) {
