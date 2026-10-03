@@ -1,44 +1,53 @@
-# Plano de Implementação - Correção da Detecção de Delimitador e Divisão de Colunas no CsvRosterParser
+# Plano de Implementação - Correção Definitiva do CsvRosterParser
 
-Corrigir a falha de detecção do delimitador no `CsvRosterParser.kt` que causava a fusão de todos os campos de uma linha em uma única string concatenada no campo Nome.
-
----
-
-## Causa Raiz do Problema
-Anteriormente, a detecção de delimitador contava os caracteres `,` e `;` acumulados nas primeiras 10 linhas. Se a contagem identificava erroneamente o delimitador oposto (por exemplo, buscando `;` em um arquivo separado por `,`), a função `parseTokens` não encontrava divisores e retornava a linha inteira como um único token (`tokens.size == 1`). Como `nameCol = 0`, a string completa da linha era atribuída ao campo `name`.
+Refazer o parser de CSV (`CsvRosterParser.kt`) para garantir robustez absoluta contra arquivos de planilhas renomeados (XLSX), encodimentos mistos (UTF-8 com fallback para Windows-1252), detecção rigorosa de delimitadores (vírgula, ponto-e-vírgula, TAB e pipe) e normalização de cabeçalhos sem acentos.
 
 ---
 
-## Mudanças Propostas
+## Detalhes da Arquitetura e Regras do Parser
 
-### 1. Detecção Precisa de Delimitador (`CsvRosterParser.kt`)
-- Analisar a **primeira linha não-vazia** do arquivo (desconsiderando BOM).
-- Contar a quantidade exata de vírgulas (`,`) e ponto-e-vírgulas (`;`) na primeira linha:
-  - Se `commas > semicolons` $\rightarrow$ `delimiter = ','`
-  - Se `semicolons > commas` $\rightarrow$ `delimiter = ';'`
-  - Em caso de empate ou ausência $\rightarrow$ padrão `','`.
+### 1. Validação do Magic Byte (Rejeição de XLSX Renomeado)
+- Antes de tentar ler o texto do Stream, o parser inspecionará os primeiros bytes do arquivo.
+- Se os bytes iniciais forem `0x50` e `0x4B` (assinatura `"PK"` de arquivos ZIP/XLSX do Microsoft Excel):
+  - Retornar imediatamente `CsvParseResult(emptyList(), listOf("Arquivo inválido. Envie um CSV de texto, não uma planilha Excel renomeada."))`.
 
-### 2. Validação Estrita do Número de Colunas por Linha
-- Para cada linha processada, validar se o número de colunas (`tokens.size`) é compatível com os índices mapeados (pelo menos 2 colunas para extrair Nome e Time/Banco).
-- Se `tokens.size < 2` ou se `tokens` não contiver os campos essenciais separadamente:
-  - Registrar aviso/erro com o número da linha e pular (`continue`).
+### 2. Leitura de Texto com Fallback de Encoding (UTF-8 / Windows-1252)
+- Tentar decodificar os bytes como `UTF-8` estrito.
+- Caso ocorra exceção de caractere malformado (comum em Option Files exportados no Windows em Ansi/Windows-1252):
+  - Fazer fallback automático para `Windows-1252` (`ISO-8859-1`).
+- Remover marcas BOM (`\uFEFF`, `\uFFFE`) do início da string.
 
-### 3. Divisão e Mapeamento dos Campos para `PlayerEntity`
-- Mapear rigorosamente cada token isolado:
-  - `tokens[nameCol]` $\rightarrow$ `name` (sanitizado de aspas e espaços).
-  - `tokens[teamCol]` $\rightarrow$ `csvTeam` (se em branco, atribui `"Banco da Liga"`).
-  - `tokens[posCol]` $\rightarrow$ `position`.
-  - `tokens[ovrCol]` $\rightarrow$ `overall`.
-  - Colunas estendidas do PES 6 Editor (altura, pé, nacionalidade, camisa, 26 atributos numéricos) extraídas dos respectivos índices.
+### 3. Detecção Real do Delimitador
+- Inspecionar a primeira linha não-vazia do texto.
+- Contar a frequência dos delimitadores candidatos:
+  - `,` (vírgula)
+  - `;` (ponto-e-vírgula)
+  - `\t` (TAB)
+  - `|` (pipe)
+- Selecionar o caractere que possuir o maior número de ocorrências.
+- Em caso de empate na contagem, utilizar a seguinte ordem estrita de prioridade: `,` > `;` > `\t` > `|`.
 
-### 4. Testes e Validação
-- **Teste com o arquivo real (`elencos_legacy_pes6_final.csv`):**
-  - Garantir 4.783 atletas extraídos.
-  - ~121 times identificados (incluindo o Banco da Liga).
-  - 0 erros.
-  - Verificar que o campo `name` contém exclusivamente o nome do atleta (sem time/posição grudados).
-- **Novo Teste Unitário:**
-  - Simular uma linha com delimitador vírgula e ponto-e-vírgula e verificar a separação exata dos campos `name`, `csvTeam`, `position` e `overall`.
+### 4. Normalização do Cabeçalho
+- Remover acentuação (usando `java.text.Normalizer.Form.NFD`) e converter para minúsculas.
+- Mapeamento dinâmico de colunas (case e accent-insensitive):
+  - `name` / `nome` / `jogador` / `player` $\rightarrow$ `nameCol`
+  - `team` / `time` / `club` / `clube` / `equipe` $\rightarrow$ `teamCol`
+  - `pos` / `posicao` / `position` $\rightarrow$ `posCol`
+  - `ovr` / `overall` / `geral` $\rightarrow$ `ovrCol`
+
+### 5. Validação de Colunas e Dados por Linha
+- Se a divisão de uma linha resultar em apenas 1 coluna $\rightarrow$ registrar erro `"Linha X: Delimitador não reconhecido ou colunas insuficientes."` e ignorar a linha.
+- Se o campo `name` estiver em branco $\rightarrow$ registrar erro e ignorar a linha.
+- Se o campo `csvTeam` estiver em branco $\rightarrow$ atribuir ao `"Banco da Liga"` (`InitialDataDefaults.LEAGUE_BANK_NAME`).
+
+### 6. Testes Unitários Obrigatórios
+- Teste com delimitador vírgula `,`.
+- Teste com delimitador ponto-e-vírgula `;`.
+- Teste com delimitador TAB `\t`.
+- Teste com marcas BOM.
+- Teste com arquivo XLSX renomeado para `.csv` (garantir erro amigável).
+- Teste com jogador sem time (garantir ida ao Banco da Liga).
+- Teste de carga com `elencos_legacy_pes6_final.csv` (4.783 atletas, ~121 clubes, 0 erros, sem fusão de textos).
 
 ---
 
@@ -47,20 +56,22 @@ Anteriormente, a detecção de delimitador contava os caracteres `,` e `;` acumu
 ### Domain / Parser
 
 #### [MODIFY] [CsvRosterParser.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/domain/parser/CsvRosterParser.kt)
-- Ajustar a lógica de detecção de delimitador para inspecionar a primeira linha não-vazia.
-- Adicionar validação do número mínimo de colunas por linha.
+- Implementar verificação de magic bytes (ZIP/XLSX).
+- Implementar decodificação UTF-8 com fallback Windows-1252.
+- Implementar contagem de delimitadores (`,`, `;`, `\t`, `|`) com prioridade de empate.
+- Implementar normalização NFD sem acentos no cabeçalho.
 
 ### Unit Tests
 
 #### [MODIFY] [CsvRosterParserTest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/test/java/com/example/legacymasterliga/domain/parser/CsvRosterParserTest.kt)
-- Adicionar teste unitário validando a divisão de tokens e inspeção de delimitadores.
+- Adicionar os 7 cenários de teste unitário obrigatórios.
 
 ---
 
 ## Plano de Verificação
 
-### Testes Automatizados
-- Executar os testes unitários do parser: `gradle_build("app:assembleDebug")` e teste unitário local com `elencos_legacy_pes6_final.csv`.
+### Automated Tests
+- Executar os testes unitários via Gradle: `gradle_build("app:assembleDebug")` e rodar a suíte `CsvRosterParserTest`.
 
 ### Manual Verification & Build
 - Executar Clean e Rebuild (`clean app:assembleDebug`).
