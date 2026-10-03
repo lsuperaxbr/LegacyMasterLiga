@@ -150,6 +150,46 @@ class CsvRosterParserTest {
     }
 
     @Test
+    fun `parse csv with tab delimiter succeeds`() {
+        val tabCsvContent = "Nome\tTime\tPosição\tGeral\n\"Rodrygo\"\t\"Real Madrid\"\t\"PE\"\t88"
+        val inputStream = ByteArrayInputStream(tabCsvContent.toByteArray(Charsets.UTF_8))
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(1, result.players.size)
+        assertEquals("Rodrygo", result.players[0].name)
+        assertEquals("Real Madrid", result.players[0].csvTeam)
+    }
+
+    @Test
+    fun `parse csv with UTF8 BOM succeeds`() {
+        val bomCsvContent = "\uFEFF" + """
+            Nome;Time;Posição;Geral
+            "Lionel Messi";"Barcelona";"PE";93
+        """.trimIndent()
+
+        val inputStream = ByteArrayInputStream(bomCsvContent.toByteArray(Charsets.UTF_8))
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(1, result.players.size)
+        assertEquals("Lionel Messi", result.players[0].name)
+        assertEquals("Barcelona", result.players[0].csvTeam)
+    }
+
+    @Test
+    fun `renamed xlsx file with PK magic bytes is rejected with friendly error`() {
+        // Magic bytes do ZIP/XLSX "PK\x03\x04"
+        val xlsxBytes = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00)
+        val inputStream = ByteArrayInputStream(xlsxBytes)
+        val result = CsvRosterParser.parse(inputStream)
+
+        assertTrue(result.players.isEmpty())
+        assertEquals(1, result.errors.size)
+        assertTrue(result.errors[0].contains("planilha Excel renomeada"))
+    }
+
+    @Test
     fun `csv with blank name discards row and records error`() {
         val csvContent = """
             Nome;Time;Posição;Geral

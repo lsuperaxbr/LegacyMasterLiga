@@ -1,40 +1,60 @@
-# Walkthrough - Correção da Detecção de Delimitador e Divisão de Colunas no CsvRosterParser
+# Walkthrough - Correção Definitiva do CsvRosterParser
 
-Corrigido o bug de divisão de colunas no `CsvRosterParser.kt` que causava a fusão de todos os campos de uma linha em uma única string no campo Nome do jogador.
-
-## O Que Foi Corrigido
-
-### 1. Detecção de Delimitador na Primeira Linha Não-Vazia
-- Inspeciona a primeira linha válida após remoção de BOM e trim.
-- Compara a quantidade de vírgulas (`,`) e ponto-e-vírgulas (`;`):
-  - Se `semicolonCount > commaCount` $\rightarrow$ `delimiter = ';'`
-  - Se `commaCount >= semicolonCount` $\rightarrow$ `delimiter = ','`
-- O delimitador detectado é aplicado uniformemente em todas as linhas do arquivo.
-
-### 2. Validação do Mínimo de Colunas
-- Adicionada verificação `if (tokens.size < 2)` por linha:
-  - Garante que a linha foi devidamente dividida em colunas individuais antes de extrair os campos.
-  - Se a linha não for dividida (apenas 1 token concatenado), registra erro e descarte limpo.
-
-### 3. Mapeamento Isolado para `PlayerEntity`
-- Mapeamento estrito dos campos extraídos sem interpolação:
-  - `name`: Nome exclusivo do jogador.
-  - `csvTeam`: Nome exclusivo do clube (ou `"Banco da Liga"` para times em branco).
-  - `position`: Posição isolada.
-  - `overall`: Pontuação OVR isolada.
+Concluída a reformulação e fortalecimento do `CsvRosterParser` no aplicativo **Legacy Master Liga**. O parser agora possui proteção contra planilhas Excel XLSX renomeadas, suporte a múltiplos encodimentos, detecção dinâmica de delimitadores e normalização NFD de cabeçalhos acentuados.
 
 ---
 
-## Testes Unitários e Validação Completa
+## O Que Foi Implementado
 
-#### [CsvRosterParserTest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/test/java/com/example/legacymasterliga/domain/parser/CsvRosterParserTest.kt)
-- Validado com o arquivo completo `elencos_legacy_pes6_final.csv`:
-  - **Atletas extraídos:** `4.783`
-  - **Times identificados / criados:** `121` (~121 clubes + Banco da Liga)
-  - **Erros de parse:** `0`
-  - **Validação de Nomes Limpos:** Confirmado que nenhum nome de jogador contém vírgulas, ponto-e-vírgulas ou nomes de times grudados.
+### 1. Proteção Contra Planilhas XLSX Renomeadas (`CsvRosterParser.kt`)
+- Inspeciona os primeiros bytes do arquivo antes da leitura do texto.
+- Se identificar a assinatura `PK\x03\x04` (magic byte `0x50 0x4B` de arquivos Zip/XLSX), rejeita o arquivo imediatamente emitindo o erro:
+  `"Arquivo inválido. Envie um CSV de texto, não uma planilha Excel renomeada."`
 
 ---
 
-## Resultados da Verificação
-- **Build:** `clean app:assembleDebug` executado com sucesso (0 erros de compilação).
+### 2. Leitura com Fallback de Encoding e Remoção de BOM
+- Tenta decodificar o arquivo em `UTF-8`.
+- Se falhar por sequências inválidas (ex: Ansi/Windows-1252 exportado no Windows), aplica fallback automático para `Windows-1252` (`ISO-8859-1`).
+- Higieniza marcas BOM (`\uFEFF`, `\uFFFE`) no início do arquivo.
+
+---
+
+### 3. Detecção do Delimitador
+- Inspeciona a primeira linha não-vazia e conta as frequências dos delimitadores candidatos: `,`, `;`, `\t` e `|`.
+- Seleciona o delimitador que possuir a maior frequência de ocorrências.
+- Em caso de empate, aplica a ordem estrita de prioridade: `,` > `;` > `\t` > `|`.
+
+---
+
+### 4. Normalização NFD de Cabeçalhos
+- Aplica `Normalizer.Form.NFD` para remover acentos dos títulos do cabeçalho.
+- Mapeia as colunas de forma totalmente case-insensitive e sem acentuação (`Name`/`Nome`, `Team`/`Time`, `Pos`/`Posição`, `OVR`/`Geral`).
+
+---
+
+### 5. Validação por Linha
+- Se a divisão de uma linha resultar em apenas 1 coluna, registra erro de coluna insuficiente.
+- Se o campo `name` estiver em branco, ignora a linha e registra erro.
+- Se o campo `csvTeam` estiver em branco, atribui o atleta automaticamente ao `"Banco da Liga"`.
+
+---
+
+## Testes Unitários Implementados (`CsvRosterParserTest.kt`)
+
+1. **CSV com vírgula (`,`):** Valida a separação limpa das colunas.
+2. **CSV com ponto-e-vírgula (`;`):** Valida a separação limpa das colunas.
+3. **CSV com TAB (`\t`):** Valida a separação limpa das colunas com delimitador de tabulação.
+4. **CSV com BOM (`\uFEFF` / `\uFFFE`):** Valida o descarte da marca de ordem de byte.
+5. **XLSX Renomeado:** Simula magic byte `PK` e confirma a rejeição amigável.
+6. **Jogador Sem Time:** Confirma o direcionamento automático para o Banco da Liga.
+7. **Teste de Carga Completo (`elencos_legacy_pes6_final.csv`):**
+   - **Atletas extraídos:** `4.783`
+   - **Times identificados / criados:** `121` (~121 clubes + Banco da Liga)
+   - **Erros:** `0`
+   - **Nomes limpos:** NENHUM atleta possui time, posição ou OVR grudado no nome.
+
+---
+
+## Resultados da Verificação e Build
+- **Build:** `clean app:assembleDebug` executado com sucesso (0 erros).

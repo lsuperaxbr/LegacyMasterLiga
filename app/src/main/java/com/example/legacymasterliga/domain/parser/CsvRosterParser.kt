@@ -5,6 +5,10 @@ import com.example.legacymasterliga.domain.model.CsvParseResult
 import com.example.legacymasterliga.domain.model.CsvRawPlayer
 import com.example.legacymasterliga.domain.model.InitialDataDefaults
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
+import java.text.Normalizer
 
 object CsvRosterParser {
 
@@ -27,29 +31,55 @@ object CsvRosterParser {
     )
 
     fun parse(inputStream: InputStream): CsvParseResult {
-        val lines = inputStream.bufferedReader(Charsets.UTF_8).readLines()
-        if (lines.isEmpty()) {
+        val bytes = inputStream.readBytes()
+        if (bytes.isEmpty()) {
             return CsvParseResult(emptyList(), listOf("O arquivo CSV está vazio."))
         }
 
-        // Diagnóstico e sanitização de BOM (\uFEFF) na Linha 1
-        val firstLine = lines.firstOrNull().orEmpty()
-        val hasBom = firstLine.startsWith("\uFEFF") || firstLine.startsWith("\uFFFE")
-        val charCodes1to10 = firstLine.take(10).map { it.code }
-        val firstRawLineFormatted = formatRawLineForDisplay(firstLine)
-
-        Log.d(TAG, "DIAGNOSTICO CSV: Total linhas=${lines.size}, Tem BOM=$hasBom, Char codes 1-10=$charCodes1to10")
-        lines.take(3).forEachIndexed { index, line ->
-            Log.d(TAG, "Linha Bruta ${index + 1}: ${formatRawLineForDisplay(line)}")
+        // 1. Rejeitar arquivos XLSX renomeados (magic bytes "PK\x03\x04")
+        if (bytes.size >= 2 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte()) {
+            return CsvParseResult(
+                players = emptyList(),
+                errors = listOf("Arquivo inválido. Envie um CSV de texto, não uma planilha Excel renomeada.")
+            )
         }
 
-        // Detectar delimitador na primeira linha não-vazia (remover BOM e trim)
+        // 2. Decodificação UTF-8 com fallback para Windows-1252
+        val rawText = try {
+            val decoder = Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+            decoder.decode(ByteBuffer.wrap(bytes)).toString()
+        } catch (e: Exception) {
+            String(bytes, Charset.forName("Windows-1252"))
+        }
+
+        val text = rawText.removePrefix("\uFEFF").removePrefix("\uFFFE")
+        val lines = text.lines().map { it.trimEnd('\r', '\n') }
+        if (lines.isEmpty() || lines.all { cleanToken(it).isBlank() }) {
+            return CsvParseResult(emptyList(), listOf("O arquivo CSV está vazio."))
+        }
+
+        val firstLine = lines.firstOrNull().orEmpty()
+        val firstRawLineFormatted = formatRawLineForDisplay(firstLine)
+
+        Log.d(TAG, "DIAGNOSTICO CSV: Total linhas=${lines.size}, Primeira linha: $firstRawLineFormatted")
+
+        // 3. Detecção real de delimitador na primeira linha não-vazia
         val firstNonEmptyLine = lines.firstOrNull { cleanToken(it).isNotBlank() }
             ?.let { cleanToken(it) }.orEmpty()
 
-        val commaCount = firstNonEmptyLine.count { it == ',' }
-        val semicolonCount = firstNonEmptyLine.count { it == ';' }
-        val delimiter = if (semicolonCount > commaCount) ';' else ','
+        val counts = mapOf(
+            ',' to firstNonEmptyLine.count { it == ',' },
+            ';' to firstNonEmptyLine.count { it == ';' },
+            '\t' to firstNonEmptyLine.count { it == '\t' },
+            '|' to firstNonEmptyLine.count { it == '|' }
+        )
+
+        val maxCount = counts.values.maxOrNull() ?: 0
+        val delimiter = if (maxCount == 0) ',' else {
+            listOf(',', ';', '\t', '|').first { counts[it] == maxCount }
+        }
 
         val players = mutableListOf<CsvRawPlayer>()
         val errors = mutableListOf<String>()
@@ -66,34 +96,32 @@ object CsvRosterParser {
 
         var startIndex = 0
 
-        // Verificar se a primeira linha é cabeçalho
+        // 4. Verificar se a primeira linha é cabeçalho com normalização NFD
         val firstTokens = parseTokens(lines[0], delimiter)
         val isHeader = firstTokens.any { token ->
-            val clean = cleanToken(token).lowercase()
-            clean == "nome" || clean == "name" || clean == "player" || clean == "jogador" ||
-                    clean == "time" || clean == "team" || clean == "club" || clean == "clube" || clean == "equipe" ||
-                    clean == "pos" || clean == "posição" || clean == "posicao" || clean == "position" ||
-                    clean == "ovr" || clean == "overall" || clean == "geral"
+            val norm = normalize(token)
+            norm in setOf("nome", "name", "player", "jogador", "time", "team", "club", "clube", "equipe", "pos", "posicao", "position", "ovr", "overall", "geral")
         }
 
         if (isHeader) {
             startIndex = 1
             firstTokens.forEachIndexed { idx, token ->
-                val clean = cleanToken(token).lowercase()
+                val norm = normalize(token)
                 when {
-                    clean == "team" || clean == "time" || clean == "club" || clean == "clube" || clean == "equipe" -> teamCol = idx
-                    clean == "name" || clean == "nome" || clean == "player" || clean == "jogador" -> nameCol = idx
-                    clean == "pos" || clean == "posição" || clean == "posicao" || clean == "position" -> posCol = idx
-                    clean == "ovr" || clean == "overall" || clean == "geral" -> ovrCol = idx
-                    clean == "altura" || clean == "height" || clean == "alt" -> heightCol = idx
-                    clean == "pé" || clean == "pe" || clean == "foot" || clean == "preferred foot" -> footCol = idx
-                    clean == "nacionalidade" || clean == "nation" || clean == "nac" || clean == "nationality" -> natCol = idx
-                    clean == "camisa" || clean == "shirt" || clean == "number" || clean == "no" -> shirtCol = idx
-                    clean == "attack" || clean == "att" -> attrStartCol = idx
+                    norm in setOf("team", "time", "club", "clube", "equipe") -> teamCol = idx
+                    norm in setOf("name", "nome", "player", "jogador") -> nameCol = idx
+                    norm in setOf("pos", "posicao", "position") -> posCol = idx
+                    norm in setOf("ovr", "overall", "geral") -> ovrCol = idx
+                    norm in setOf("altura", "height", "alt") -> heightCol = idx
+                    norm in setOf("pe", "foot", "preferred foot") -> footCol = idx
+                    norm in setOf("nacionalidade", "nation", "nac", "nationality") -> natCol = idx
+                    norm in setOf("camisa", "shirt", "number", "no") -> shirtCol = idx
+                    norm in setOf("attack", "att") -> attrStartCol = idx
                 }
             }
         }
 
+        // 5. Processamento e validação de cada linha
         for (i in startIndex until lines.size) {
             val rawLine = lines[i]
             if (rawLine.isBlank()) continue
@@ -101,7 +129,7 @@ object CsvRosterParser {
 
             val tokens = parseTokens(rawLine, delimiter)
             if (tokens.size < 2) {
-                errors.add("Linha $lineNum: Formato inválido ou colunas insuficientes (apenas 1 coluna encontrada).")
+                errors.add("Linha $lineNum: Delimitador não reconhecido ou colunas insuficientes (apenas 1 coluna encontrada).")
                 continue
             }
 
@@ -174,6 +202,12 @@ object CsvRosterParser {
 
     private fun cleanToken(token: String): String {
         return token.removePrefix("\uFEFF").removePrefix("\uFFFE").trim().removeSurrounding("\"")
+    }
+
+    private fun normalize(str: String): String {
+        val clean = cleanToken(str)
+        val nfd = Normalizer.normalize(clean, Normalizer.Form.NFD)
+        return nfd.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "").lowercase().trim()
     }
 
     private fun formatRawLineForDisplay(line: String): String {
