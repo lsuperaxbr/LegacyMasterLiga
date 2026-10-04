@@ -178,7 +178,13 @@ fun LegacyNavGraph(rootViewModel: RootViewModel = hiltViewModel()) {
                 navArgument("clubId") { type = NavType.LongType },
                 navArgument("seasonId") { type = NavType.LongType; defaultValue = 0L },
             ),
-        ) { ClubProfileRoute(onBack = navController::navigateUp, onOpenPlayer = { id -> navController.navigate(LegacyDestination.PlayerDetail.createRoute(id)) }) }
+        ) {
+            ClubProfileRoute(
+                onBack = navController::navigateUp,
+                onOpenPlayer = { id -> navController.navigate(LegacyDestination.PlayerDetail.createRoute(id)) },
+                onOpenImportAttributes = { clubId -> navController.navigate(LegacyDestination.ImportTeamAttributes.createRoute(clubId)) }
+            )
+        }
         composable(
             route = LegacyDestination.PlayerDetail.route,
             arguments = listOf(navArgument("playerId") { type = NavType.LongType }),
@@ -317,6 +323,14 @@ fun LegacyNavGraph(rootViewModel: RootViewModel = hiltViewModel()) {
         }
         composable(LegacyDestination.SyncDiagnostic.route) {
             com.example.legacymasterliga.feature.online.sync.presentation.SyncDiagnosticScreen(
+                onBack = navController::navigateUp
+            )
+        }
+        composable(
+            route = LegacyDestination.ImportTeamAttributes.route,
+            arguments = listOf(navArgument("clubId") { type = NavType.LongType; defaultValue = 0L })
+        ) {
+            com.example.legacymasterliga.feature.attributes.presentation.ImportTeamAttributesRoute(
                 onBack = navController::navigateUp
             )
         }

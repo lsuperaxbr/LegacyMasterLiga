@@ -71,4 +71,8 @@ sealed interface LegacyDestination {
     data object BetaTestGuide : LegacyDestination { override val route = "beta_test_guide" }
     data object PresidentProfile : LegacyDestination { override val route = "president_profile" }
     data object SyncDiagnostic : LegacyDestination { override val route = "sync_diagnostic" }
+    data object ImportTeamAttributes : LegacyDestination {
+        override val route = "import_team_attributes?clubId={clubId}"
+        fun createRoute(clubId: Long? = null): String = "import_team_attributes?clubId=${clubId ?: 0L}"
+    }
 }

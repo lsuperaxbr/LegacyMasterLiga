@@ -41,6 +41,7 @@ import java.util.Locale
 fun ClubProfileRoute(
     onBack: () -> Unit,
     onOpenPlayer: (Long) -> Unit,
+    onOpenImportAttributes: (Long) -> Unit = {},
     viewModel: ClubProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -63,6 +64,7 @@ fun ClubProfileRoute(
         onAddPlayersBatch = viewModel::addPlayersBatch,
         onPrecifyAll = viewModel::precifyAllPlayers,
         onOpenPlayer = onOpenPlayer,
+        onOpenImportAttributes = onOpenImportAttributes,
         onRevertTransfer = viewModel::revertTransfer,
         onDispensePlayer = viewModel::dispensePlayer,
     )
@@ -79,6 +81,7 @@ fun ClubProfileScreen(
     onAddPlayersBatch: (List<String>, Long?, Boolean) -> Unit,
     onPrecifyAll: (Long) -> Unit,
     onOpenPlayer: (Long) -> Unit,
+    onOpenImportAttributes: (Long) -> Unit = {},
     onRevertTransfer: (Long) -> Unit,
     onDispensePlayer: (com.example.legacymasterliga.domain.model.Player) -> Unit,
 ) {
@@ -123,7 +126,15 @@ fun ClubProfileScreen(
 
             when (selectedTab) {
                 0 -> SummaryTab(state, onSelectSeason)
-                1 -> RosterTab(state, onAddPlayer, onAddPlayersBatch, onPrecifyAll, onOpenPlayer, onDispensePlayer)
+                1 -> RosterTab(
+                    state = state,
+                    onAddPlayer = onAddPlayer,
+                    onAddPlayersBatch = onAddPlayersBatch,
+                    onPrecifyAll = onPrecifyAll,
+                    onOpenPlayer = onOpenPlayer,
+                    onOpenImportAttributes = { onOpenImportAttributes(header.clubId) },
+                    onDispensePlayer = onDispensePlayer
+                )
                 2 -> HistoryTab(state.history)
                 3 -> NegociacoesTab(state.transfers, header.clubId, state.isAdmin, onRevertTransfer)
                 4 -> TrophiesTab(state.trophies)
@@ -174,6 +185,7 @@ private fun RosterTab(
     onAddPlayersBatch: (List<String>, Long?, Boolean) -> Unit,
     onPrecifyAll: (Long) -> Unit,
     onOpenPlayer: (Long) -> Unit,
+    onOpenImportAttributes: () -> Unit = {},
     onDispensePlayer: (com.example.legacymasterliga.domain.model.Player) -> Unit,
 ) {
     val players = state.players
@@ -183,8 +195,6 @@ private fun RosterTab(
     var playerToDispense by remember { mutableStateOf<com.example.legacymasterliga.domain.model.Player?>(null) }
     
     val isBank = state.header?.isActive == true && state.header.clubName.contains("Banco", ignoreCase = true) 
-    // Nota: Usamos a detecção de nome pois o domínio Club não tem isBank. 
-    // Como Engenheiro Chefe, garanto que o Admin verá botões extras.
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -200,6 +210,9 @@ private fun RosterTab(
                 ) {
                     Text("Jogadores vinculados", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = onOpenImportAttributes) {
+                            Icon(Icons.Outlined.FileUpload, contentDescription = "Importar Atributos (TXT)", tint = MaterialTheme.colorScheme.primary)
+                        }
                         if (isBank) {
                             IconButton(onClick = { showPrecifyDialog = true }) {
                                 Icon(Icons.Outlined.Sell, contentDescription = "Precificar Tudo", tint = MaterialTheme.colorScheme.primary)
