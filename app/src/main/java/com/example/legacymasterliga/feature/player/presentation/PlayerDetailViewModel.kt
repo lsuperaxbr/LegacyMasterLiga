@@ -82,7 +82,13 @@ class PlayerDetailViewModel @Inject constructor(
         }
     }
 
-    fun updatePlayerDetails(name: String, position: String?, overall: Int?) {
+    fun updatePlayerDetails(
+        name: String,
+        position: String?,
+        overall: Int?,
+        heightCm: Int? = null,
+        preferredFoot: String? = null
+    ) {
         viewModelScope.launch {
             if (!uiState.value.canManage) {
                 _uiState.update { it.copy(errorMessage = "Você não tem permissão para editar este jogador.") }
@@ -94,6 +100,8 @@ class PlayerDetailViewModel @Inject constructor(
                     name = name.trim(),
                     position = position?.trim()?.ifBlank { null },
                     overall = overall,
+                    heightCm = heightCm,
+                    preferredFoot = preferredFoot?.trim()?.ifBlank { null }
                 )
             )
             loadPlayer()

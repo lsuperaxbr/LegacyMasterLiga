@@ -117,14 +117,14 @@ class ClubProfileViewModel @Inject constructor(
 
     private val MAX_SQUAD = 32
 
-    fun addPlayer(name: String, position: String?) {
+    fun addPlayer(name: String, position: String?, heightCm: Int? = 180, preferredFoot: String? = "R") {
         viewModelScope.launch {
             if (!isLeagueBank && uiState.value.players.size >= MAX_SQUAD) {
                 _feedback.value = "Limite de $MAX_SQUAD jogadores atingido no elenco."
                 return@launch
             }
             val leagueId = uiState.value.header?.leagueId ?: return@launch
-            saveSinglePlayer(name, position, leagueId, com.example.legacymasterliga.core.model.MarketStatus.NOT_LISTED, null)
+            saveSinglePlayer(name, position, heightCm, preferredFoot, leagueId, com.example.legacymasterliga.core.model.MarketStatus.NOT_LISTED, null)
         }
     }
 
@@ -143,7 +143,7 @@ class ClubProfileViewModel @Inject constructor(
 
             val status = if (putForSale) com.example.legacymasterliga.core.model.MarketStatus.FOR_SALE else com.example.legacymasterliga.core.model.MarketStatus.NOT_LISTED
             namesToAdd.forEach { name ->
-                saveSinglePlayer(name, null, leagueId, status, initialPrice)
+                saveSinglePlayer(name, null, 180, "R", leagueId, status, initialPrice)
             }
             
             _feedback.value = if (skipped == 0) "Jogadores adicionados com sucesso."
@@ -181,7 +181,15 @@ class ClubProfileViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveSinglePlayer(name: String, position: String?, leagueId: Long, status: com.example.legacymasterliga.core.model.MarketStatus, price: Long?) {
+    private suspend fun saveSinglePlayer(
+        name: String,
+        position: String?,
+        heightCm: Int?,
+        preferredFoot: String?,
+        leagueId: Long,
+        status: com.example.legacymasterliga.core.model.MarketStatus,
+        price: Long?
+    ) {
         playerRepository.savePlayer(
             com.example.legacymasterliga.domain.model.Player(
                 id = 0,
@@ -193,7 +201,9 @@ class ClubProfileViewModel @Inject constructor(
                 askingPriceCr = price,
                 skillImageUri = null,
                 notes = null,
-                externalPlayerId = null
+                externalPlayerId = null,
+                heightCm = heightCm,
+                preferredFoot = preferredFoot
             )
         )
     }

@@ -75,7 +75,7 @@ fun ClubProfileScreen(
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onSelectSeason: (Long) -> Unit,
-    onAddPlayer: (String, String?) -> Unit,
+    onAddPlayer: (String, String?, Int?, String?) -> Unit,
     onAddPlayersBatch: (List<String>, Long?, Boolean) -> Unit,
     onPrecifyAll: (Long) -> Unit,
     onOpenPlayer: (Long) -> Unit,
@@ -170,7 +170,7 @@ private fun SummaryTab(state: ClubProfileUiState, onSelectSeason: (Long) -> Unit
 @Composable
 private fun RosterTab(
     state: ClubProfileUiState,
-    onAddPlayer: (String, String?) -> Unit,
+    onAddPlayer: (String, String?, Int?, String?) -> Unit,
     onAddPlayersBatch: (List<String>, Long?, Boolean) -> Unit,
     onPrecifyAll: (Long) -> Unit,
     onOpenPlayer: (Long) -> Unit,
@@ -260,8 +260,8 @@ private fun RosterTab(
     if (showAddDialog) {
         AddPlayerDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, pos -> 
-                onAddPlayer(name, pos)
+            onConfirm = { name, pos, height, foot -> 
+                onAddPlayer(name, pos, height, foot)
                 showAddDialog = false
             }
         )
@@ -698,22 +698,99 @@ private fun MarketStatusTag(player: com.example.legacymasterliga.domain.model.Pl
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddPlayerDialog(onDismiss: () -> Unit, onConfirm: (String, String?) -> Unit) {
+private fun AddPlayerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String?, Int?, String?) -> Unit
+) {
     var name by remember { mutableStateOf("") }
     var position by remember { mutableStateOf("") }
-    
+    var heightText by remember { mutableStateOf("180") }
+    var preferredFoot by remember { mutableStateOf("R") }
+
+    val feet = listOf("R" to "Destro (R)", "L" to "Canhoto (L)", "" to "Não informado")
+    var footExpanded by remember { mutableStateOf(false) }
+
+    val parsedHeight = heightText.toIntOrNull()
+    val isHeightValid = heightText.isBlank() || (parsedHeight != null && parsedHeight in 100..250)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Novo Jogador") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Nome do jogador") }, singleLine = true)
-                OutlinedTextField(position, { position = it }, label = { Text("Posição (ex: CA, MAT, LD)") }, singleLine = true)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nome do jogador") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = position,
+                    onValueChange = { position = it },
+                    label = { Text("Posição (ex: CA, MAT, LD)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ExposedDropdownMenuBox(
+                        expanded = footExpanded,
+                        onExpandedChange = { footExpanded = it },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        val footLabel = feet.find { it.first == preferredFoot }?.second ?: "Pé Dominante"
+                        OutlinedTextField(
+                            value = footLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Pé Dominante") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = footExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = footExpanded,
+                            onDismissRequest = { footExpanded = false }
+                        ) {
+                            feet.forEach { (code, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        preferredFoot = code
+                                        footExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = heightText,
+                        onValueChange = { heightText = it.filter { c -> c.isDigit() }.take(3) },
+                        label = { Text("Altura (cm)") },
+                        isError = !isHeightValid,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(0.9f)
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(name, position.takeIf { it.isNotBlank() }) }, enabled = name.isNotBlank()) {
+            Button(
+                onClick = {
+                    onConfirm(
+                        name,
+                        position.takeIf { it.isNotBlank() },
+                        parsedHeight,
+                        preferredFoot.takeIf { it.isNotBlank() }
+                    )
+                },
+                enabled = name.isNotBlank() && isHeightValid
+            ) {
                 Text("Cadastrar")
             }
         },

@@ -45,7 +45,7 @@ fun PlayerDetailScreen(
     state: PlayerDetailUiState,
     onBack: () -> Unit,
     onUpdateMarketStatus: (MarketStatus, Long?) -> Unit,
-    onUpdatePlayerDetails: (String, String?, Int?) -> Unit,
+    onUpdatePlayerDetails: (String, String?, Int?, Int?, String?) -> Unit,
     onUpdateAttributesFromText: (String) -> Unit,
     onDeletePlayer: (() -> Unit) -> Unit,
 ) {
@@ -202,8 +202,8 @@ fun PlayerDetailScreen(
         EditPlayerDialog(
             player = state.player,
             onDismiss = { showEditDialog = false },
-            onConfirm = { name, position, overall ->
-                onUpdatePlayerDetails(name, position, overall)
+            onConfirm = { name, position, overall, heightCm, preferredFoot ->
+                onUpdatePlayerDetails(name, position, overall, heightCm, preferredFoot)
                 showEditDialog = false
             }
         )
@@ -247,13 +247,21 @@ fun PlayerDetailScreen(
 private fun EditPlayerDialog(
     player: Player,
     onDismiss: () -> Unit,
-    onConfirm: (String, String?, Int?) -> Unit
+    onConfirm: (String, String?, Int?, Int?, String?) -> Unit
 ) {
     var name by remember { mutableStateOf(player.name) }
     var position by remember { mutableStateOf(player.position ?: "") }
     var overallText by remember { mutableStateOf(player.overall?.toString() ?: "") }
+    var heightText by remember { mutableStateOf(player.heightCm?.toString() ?: "") }
+    var preferredFoot by remember { mutableStateOf(player.preferredFoot ?: "") }
+
     val positions = listOf("GOL", "ZAG", "LD", "LE", "VOL", "MC", "MEI", "MD", "ME", "PD", "PE", "SA", "CA")
-    var expanded by remember { mutableStateOf(false) }
+    val feet = listOf("R" to "Destro (R)", "L" to "Canhoto (L)", "" to "Não informado")
+    var posExpanded by remember { mutableStateOf(false) }
+    var footExpanded by remember { mutableStateOf(false) }
+
+    val parsedHeight = heightText.toIntOrNull()
+    val isHeightValid = heightText.isBlank() || (parsedHeight != null && parsedHeight in 100..250)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -270,8 +278,8 @@ private fun EditPlayerDialog(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = it },
+                        expanded = posExpanded,
+                        onExpandedChange = { posExpanded = it },
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
@@ -279,27 +287,27 @@ private fun EditPlayerDialog(
                             onValueChange = { position = it },
                             label = { Text("Posição") },
                             readOnly = false,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = posExpanded) },
                             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                             modifier = Modifier.menuAnchor().fillMaxWidth()
                         )
 
                         ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            expanded = posExpanded,
+                            onDismissRequest = { posExpanded = false }
                         ) {
                             positions.forEach { pos ->
                                 DropdownMenuItem(
                                     text = { Text(pos) },
                                     onClick = {
                                         position = pos
-                                        expanded = false
+                                        posExpanded = false
                                     }
                                 )
                             }
                         }
                     }
-                    
+
                     OutlinedTextField(
                         value = overallText,
                         onValueChange = { overallText = it.filter { c -> c.isDigit() }.take(2) },
@@ -309,12 +317,66 @@ private fun EditPlayerDialog(
                         modifier = Modifier.weight(0.7f)
                     )
                 }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ExposedDropdownMenuBox(
+                        expanded = footExpanded,
+                        onExpandedChange = { footExpanded = it },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        val footLabel = feet.find { it.first == preferredFoot }?.second ?: "Pé Dominante"
+                        OutlinedTextField(
+                            value = footLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Pé Dominante") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = footExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = footExpanded,
+                            onDismissRequest = { footExpanded = false }
+                        ) {
+                            feet.forEach { (code, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        preferredFoot = code
+                                        footExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = heightText,
+                        onValueChange = { heightText = it.filter { c -> c.isDigit() }.take(3) },
+                        label = { Text("Altura (cm)") },
+                        placeholder = { Text("180") },
+                        isError = !isHeightValid,
+                        supportingText = if (!isHeightValid) { { Text("100 a 250 cm") } } else null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(0.9f)
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, position.ifBlank { null }, overallText.toIntOrNull()) },
-                enabled = name.isNotBlank()
+                onClick = {
+                    onConfirm(
+                        name,
+                        position.ifBlank { null },
+                        overallText.toIntOrNull(),
+                        parsedHeight,
+                        preferredFoot.ifBlank { null }
+                    )
+                },
+                enabled = name.isNotBlank() && isHeightValid
             ) {
                 Text("Salvar")
             }

@@ -710,6 +710,12 @@ object DatabaseModule {
         }
     }
 
+    private val migration30To31 = object : Migration(30, 31) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // No-op: As colunas heightCm e preferredFoot já existem na tabela 'players' desde a MIGRATION_29_30.
+        }
+    }
+
     /** Complete, ordered migration chain. Keep new migrations appended and covered by tests. */
     val migrations: Array<Migration> = arrayOf(
         migration1To2,
@@ -741,6 +747,7 @@ object DatabaseModule {
         migration27To28,
         migration28To29,
         migration29To30,
+        migration30To31,
     )
 
     @Provides
