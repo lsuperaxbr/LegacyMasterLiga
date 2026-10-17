@@ -1,104 +1,113 @@
-# Plano de Implementação - Campos Editáveis Foot e Height no Modelo de Jogador
+# Plano de Implementação - Sistema Vetorial de Escudos (`ClubBadge`)
 
-Adição e integração completa dos campos editáveis `Foot` (Pé Dominante) e `Height` (Altura em cm) nas telas de cadastro e edição de jogadores, parser e exportador TXT, com versão atualizada do banco Room (migração v30 $\rightarrow$ v31 como no-op) e testes automatizados.
-
----
-
-## Leitura e Verificação Real dos Arquivos do Projeto
-
-- **Versão Atual do Banco (`AppDatabase.kt`):** `DatabaseContract.VERSION = 30`.
-- **Historico de Migrações (`DatabaseModule.kt`):** A migração `29 -> 30` incluiu a adição das colunas `heightCm` e `preferredFoot` na tabela `players`.
-- **Entidades Existentes (`PlayerEntity.kt` e `Player.kt`):**
-  - `heightCm: Int? = null`
-  - `preferredFoot: String? = null`
+Evolução do editor e sistema de renderização de escudos do aplicativo **Legacy Master Liga**, substituindo a lógica atual por um motor vetorial completo baseado em Compose Canvas, formas geométricas, padrões, paleta de cores e símbolos centrais (`ClubBadgeConfig`).
 
 ---
 
-## Detalhes da Arquitetura e Regras de Negócio
+## Estrutura do Recurso e Regras de Negócio
 
-### 1. Banco de Dados (Room Database)
-- **Incremento da Versão:** `DatabaseContract.VERSION` alterado de `30` para `31` em `AppDatabase.kt`.
-- **Migration `30 -> 31` (`DatabaseModule.kt`):**
-  - **No-Op:** Como as colunas `heightCm` e `preferredFoot` já existem no SQLite desde a `MIGRATION_29_30`, a `migration30To31` será um no-op (sem comandos `ALTER TABLE`), incrementando o número de versão para 31 em perfeita conformidade contratual do Room.
-
----
-
-### 2. Validações e Regras de Entrada
-- **`Foot` (Pé Dominante):**
-  - Valores válidos: `"R"` (Destro), `"L"` (Canhoto) ou valor em branco/nulo (`""` ou `null`).
-  - Valor padrão ao criar novo jogador na UI: `"R"`.
-- **`Height` (Altura em cm):**
-  - Valores válidos: Inteiros entre `100` e `250` cm ou em branco/nulo (`null`).
-  - Valor padrão ao criar novo jogador na UI: `180`.
-
----
-
-### 3. Interface do Usuário (UI Jetpack Compose)
-- **Diálogo de Edição (`EditPlayerDialog` em `PlayerDetailScreen.kt`):**
-  - Adição de seletor Dropdown para `Foot` (`R`, `L`, `Não informado`).
-  - Adição de campo numérico `OutlinedTextField` para `Height` com validação de faixa (100 a 250 cm).
-- **Diálogo de Cadastro (`AddPlayerDialog` em `ClubProfileScreen.kt`):**
-  - Adição dos seletores opcionais para `Foot` (padrão `"R"`) e `Height` (padrão `180`).
+### 1. Modelo de Dados (`ClubBadgeConfig.kt`)
+Data class para representar a configuração do escudo:
+```kotlin
+data class ClubBadgeConfig(
+    val shape: String = "shield",          // "shield", "circle", "diamond", "hexagon", "crest"
+    val pattern: String = "solid",         // "solid", "vertical_stripes", "horizontal_stripes", "diagonal_stripes", "half", "cross", "central_circle"
+    val primaryColor: String = "#808080",  // HEX
+    val secondaryColor: String = "#FFFFFF",// HEX
+    val accentColor: String = "#000000",   // HEX
+    val symbol: String = "initial"         // "initial", "star", "crown", "lightning", "ball", "tree", "none"
+)
+```
+- **Codificação/Decodificação:** Métodos para converter de/para string formatada no campo `crestUri` da tabela de clubes (garantindo compatibilidade com o banco de dados Room sem necessidade de alterar schemas SQL).
+- **Valores Padrão para Clubes Existentes:** `shape = "shield"`, `pattern = "solid"`, `primaryColor = "#808080"`, `secondaryColor = "#FFFFFF"`, `accentColor = "#000000"`, `symbol = "initial"`.
 
 ---
 
-### 4. Exportador e Parser de TXT (`ExportPes6PlvrUseCase.kt` & `ImportTeamAttributesParser.kt`)
-- **Exportador TXT:**
-  - Exporta obrigatoriamente as linhas `Foot:` e `Height:`.
-  - Se os valores forem `null` ou vazios, grava a linha preservada com espaço em branco (`Foot: ` e `Height: `), **jamais omitindo a linha do campo**.
-- **Parser de Importação TXT:**
-  - Processa `Foot:` e `Height:`.
-  - Se contiver valor válido (R/L e faixa 100..250), salva no banco.
-  - Se estiver ausente, em branco ou fora do intervalo válido, salva como `null` / `""`.
+### 2. Componentes Vetoriais de Desenho (Canvas)
+
+- **`BadgeShapeDrawer.kt`:**
+  - Gera paths fechados para as 5 formas geométricas suportadas:
+    - `shield` (Escudo clássico curvado)
+    - `circle` (Círculo perfeito)
+    - `diamond` (Losango)
+    - `hexagon` (Hexágono regular)
+    - `crest` (Escudo heráldico tradicional com topo reto)
+
+- **`BadgePatternDrawer.kt`:**
+  - Aplica padrões visuais recortados (`clipPath`) dentro da forma com a `secondaryColor`:
+    - `solid` (Preenchimento uniforme)
+    - `vertical_stripes` (Listras verticais alternadas)
+    - `horizontal_stripes` (Listras horizontais alternadas)
+    - `diagonal_stripes` (Listras diagonais)
+    - `half` (Bipartido meio a meio)
+    - `cross` (Cruz centrada)
+    - `central_circle` (Círculo central interno)
+
+- **`BadgeSymbolDrawer.kt`:**
+  - Desenha os símbolos centrais em `accentColor`:
+    - `initial` (Inicial do nome do clube)
+    - `star` (Estrela de 5 pontas)
+    - `crown` (Coroa)
+    - `lightning` (Raio/Relâmpago)
+    - `ball` (Bola de futebol vetorial)
+    - `tree` (Árvore/Pinho)
+    - `none` (Nenhum símbolo)
+
+- **`ClubBadge.kt`:**
+  - Composable principal que junta a forma base preenchida com `primaryColor`, o padrão recortado em `secondaryColor`, o símbolo central em `accentColor` e a borda externa sutil para definição.
+
+---
+
+### 3. Editor de Escudo na Tela de Edição (`ClubsScreen.kt`)
+Substituição do editor em `ClubEditorDialog` pelos novos controles interativos com **Preview em Tempo Real**:
+- **Forma do Escudo:** Chips/Radio com rótulos e seletores para as 5 formas.
+- **Padrão:** Chips/Radio para os 7 padrões de preenchimento.
+- **Cores:** Paletas compactas de seleção para Cor Primária, Cor Secundária e Cor de Destaque.
+- **Símbolo Central:** Chips/Radio para os 7 símbolos suportados.
+
+---
+
+### 4. Padronização nos Tamanhos do App
+Atualização do `NativeCrest.kt` / `ClubBadge` para renderização em todos os pontos do app com dimensões padronizadas:
+- **Perfil do clube (`ClubProfileScreen`):** `80.dp`
+- **Lista de clubes (`ClubsScreen`):** `40.dp`
+- **Jogos / Rodada / Partidas (`ScheduleScreen` / `Dashboard`):** `32.dp`
+- **Tabela de Classificação (`StandingsScreen`):** `24.dp`
 
 ---
 
 ## Proposta de Mudanças Arquivos por Arquivo
 
-### Core & Database
+### Domain & UI Components
 
-#### [MODIFY] [AppDatabase.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/database/AppDatabase.kt)
-- Incrementar `DatabaseContract.VERSION` de `30` para `31`.
+#### [NEW] [ClubBadgeConfig.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/domain/model/ClubBadgeConfig.kt)
+- Classe de dados, valores padrão e funções de codificação/decodificação para o campo `crestUri`.
 
-#### [MODIFY] [DatabaseModule.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/di/DatabaseModule.kt)
-- Adicionar `migration30To31` como no-op e inseri-la no array `migrations`.
+#### [NEW] [BadgeShapeDrawer.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/BadgeShapeDrawer.kt)
+- Desenhador vetorial das formas geométricas (`shield`, `circle`, `diamond`, `hexagon`, `crest`).
 
-### Feature / UI Presentation
+#### [NEW] [BadgePatternDrawer.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/BadgePatternDrawer.kt)
+- Desenhador dos 7 padrões visuais com clipping na forma.
 
-#### [MODIFY] [PlayerDetailScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/player/presentation/PlayerDetailScreen.kt)
-- Atualizar `EditPlayerDialog` e `onUpdatePlayerDetails` para permitir editar `heightCm` e `preferredFoot`.
+#### [NEW] [BadgeSymbolDrawer.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/BadgeSymbolDrawer.kt)
+- Desenhador dos símbolos centrais vetoriais (`initial`, `star`, `crown`, `lightning`, `ball`, `tree`, `none`).
 
-#### [MODIFY] [PlayerDetailViewModel.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/player/presentation/PlayerDetailViewModel.kt)
-- Atualizar `updatePlayerDetails` para persistir `heightCm` e `preferredFoot`.
+#### [NEW] [ClubBadge.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/ClubBadge.kt)
+- Composable principal do escudo vetorial.
 
-#### [MODIFY] [ClubProfileScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/presentation/ClubProfileScreen.kt)
-- Adicionar seletores de `Foot` (padrão R) e `Height` (padrão 180) no diálogo `AddPlayerDialog`.
+#### [MODIFY] [NativeCrest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/NativeCrest.kt)
+- Atualizar para integrar e delegar o desenho para o novo `ClubBadge`.
 
-#### [MODIFY] [ClubProfileViewModel.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/presentation/ClubProfileViewModel.kt)
-- Atualizar a criação de jogador `addPlayer` para aceitar `heightCm` e `preferredFoot`.
-
-### Domain / TXT Importer & Exporter
-
-#### [MODIFY] [ExportPes6PlvrUseCase.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/domain/usecase/ExportPes6PlvrUseCase.kt)
-- Garantir a exportação das linhas `Foot:` e `Height:` mesmo quando nulas/vazias.
-
-#### [MODIFY] [ImportTeamAttributesParser.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/attributes/domain/ImportTeamAttributesParser.kt)
-- Atualizar parsing para extrair e validar `Foot` (R/L) e `Height` (100..250), salvando `null`/`""` se ausente ou inválido.
-
-### Unit Tests
-
-#### [MODIFY] [ExportPes6PlvrUseCaseTest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/test/java/com/example/legacymasterliga/domain/usecase/ExportPes6PlvrUseCaseTest.kt)
-- Validar a exportação das linhas `Foot:` e `Height:` para valores preenchidos, nulos e vazios.
-
-#### [MODIFY] [ImportTeamAttributesUseCaseTest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/test/java/com/example/legacymasterliga/feature/attributes/domain/ImportTeamAttributesUseCaseTest.kt)
-- Validar o parsing e tratamento de `Foot` e `Height` válidos, fora do intervalo (ex: < 100 ou > 250) e vazios.
+#### [MODIFY] [ClubsScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/clubs/presentation/ClubsScreen.kt)
+- Atualizar o diálogo de edição do clube (`ClubEditorDialog`) com o novo editor de forma, padrão, cores e símbolo com preview em tempo real.
 
 ---
 
 ## Plano de Verificação
 
 ### Automated Tests
-- Executar os testes unitários via Gradle: `gradle_build("app:assembleDebug")` e rodar as suítes de teste de usecases.
+- Criar `ClubBadgeConfigTest.kt` para validar a codificação/decodificação e tratamento dos valores de fallback padrão.
+- Executar os testes unitários via Gradle: `gradle_build("app:assembleDebug")`
 
 ### Manual Verification & Build
 - Executar Clean e Rebuild (`clean app:assembleDebug`).
