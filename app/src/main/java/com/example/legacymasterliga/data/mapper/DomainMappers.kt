@@ -32,6 +32,7 @@ internal fun ClubEntity.toDomain(): Club = Club(
     leagueId = leagueId,
     name = name,
     crestUri = crestUri,
+    badgeConfigJson = badgeConfigJson,
     presidentUserId = presidentUserId,
     isBank = isBank,
     isActive = isActive,

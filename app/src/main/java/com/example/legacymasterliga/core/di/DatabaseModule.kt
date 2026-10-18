@@ -716,6 +716,12 @@ object DatabaseModule {
         }
     }
 
+    private val migration31To32 = object : Migration(31, 32) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE clubs ADD COLUMN badgeConfigJson TEXT DEFAULT NULL")
+        }
+    }
+
     /** Complete, ordered migration chain. Keep new migrations appended and covered by tests. */
     val migrations: Array<Migration> = arrayOf(
         migration1To2,
@@ -748,6 +754,7 @@ object DatabaseModule {
         migration28To29,
         migration29To30,
         migration30To31,
+        migration31To32,
     )
 
     @Provides

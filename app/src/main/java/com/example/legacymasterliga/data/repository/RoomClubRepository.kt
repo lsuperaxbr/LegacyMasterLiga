@@ -52,12 +52,14 @@ class RoomClubRepository @Inject constructor(
         crestUri: String?,
         presidentUserId: Long?,
         initialBalance: Long,
+        badgeConfigJson: String?,
     ): Long = database.withTransaction {
         val id = clubDao.insert(
             ClubEntity(
                 leagueId = leagueId,
                 name = name.trim(),
                 crestUri = crestUri,
+                badgeConfigJson = badgeConfigJson,
                 presidentUserId = presidentUserId,
                 isBank = false,
                 isActive = true,
@@ -97,6 +99,7 @@ class RoomClubRepository @Inject constructor(
         name: String,
         crestUri: String?,
         presidentUserId: Long?,
+        badgeConfigJson: String?,
     ) {
         val current = requireNotNull(clubDao.findById(clubId)) { "Clube não encontrado." }
         require(!current.isBank) { "O Banco da Liga não pode ser editado por esta tela." }
@@ -120,6 +123,7 @@ class RoomClubRepository @Inject constructor(
                 leagueId = leagueId,
                 name = name.trim(),
                 crestUri = crestUri,
+                badgeConfigJson = badgeConfigJson ?: current.badgeConfigJson,
                 presidentUserId = presidentUserId,
                 updatedAt = System.currentTimeMillis(),
             ),

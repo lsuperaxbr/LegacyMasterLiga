@@ -1,29 +1,46 @@
-# Walkthrough - Campos Editáveis Foot e Height no Modelo de Jogador
+# Walkthrough - Sistema Vetorial de Escudos (`ClubBadge`)
 
-Concluída a integração dos campos editáveis `Foot` (Pé Dominante) e `Height` (Altura em cm) nas telas de cadastro e edição de jogadores, com migração no-op da Room v30 para v31 e testes automatizados de validação.
-
----
-
-## O Que Foi Alterado e Implementado
-
-### 1. Banco de Dados Room (`AppDatabase.kt` & `DatabaseModule.kt`)
-- **Versão do Banco:** Incrementada de `30` para `31` em `DatabaseContract.VERSION`.
-- **`migration30To31` (No-Op):** Implementada a migração no-op v30 $\rightarrow$ v31, pois as colunas `heightCm` e `preferredFoot` já foram criadas na tabela `players` durante a `MIGRATION_29_30`.
+Evolução do sistema de escudos do aplicativo **Legacy Master Liga**, substituindo o renderizador antigo por um motor vetorial leve baseado em Jetpack Compose Canvas, com suporte a 5 formas geométricas, 7 padrões visuais, paletas de cores, 7 símbolos centrais (incluindo a 1ª letra maiúscula do clube) e armazenamento em JSON na coluna `badgeConfigJson`.
 
 ---
 
-### 2. Interface do Usuário (UI Jetpack Compose)
-- **`EditPlayerDialog` (`PlayerDetailScreen.kt` & `PlayerDetailViewModel.kt`):**
-  - Adicionado seletor Dropdown para Pé Dominante (`Foot`): `Destro (R)`, `Canhoto (L)` ou `Não informado`.
-  - Adicionado campo numérico para Altura (`Height` em cm) com suporte a limpeza/vazio e validação no intervalo de `100` a `250` cm.
-- **`AddPlayerDialog` (`ClubProfileScreen.kt` & `ClubProfileViewModel.kt`):**
-  - Adicionados seletores opcionais para `Foot` (padrão `"R"`) e `Height` (padrão `180` cm).
+## O Que Foi Criado e Atualizado
+
+### 1. Modelo de Dados e Banco Room (`ClubBadgeConfig.kt`, `AppDatabase.kt` & `DatabaseModule.kt`)
+- **`ClubBadgeConfig`:** Estrutura de dados com `shape`, `pattern`, `primaryColor`, `secondaryColor`, `accentColor` e `symbol`.
+- **Valores Padrão Automáticos:** Para clubes sem configuração: `shape = "shield"`, `pattern = "solid"`, `primaryColor = "#808080"`, `secondaryColor = "#FFFFFF"`, `accentColor = "#000000"`, `symbol = "initial"`.
+- **Coluna no Banco (`badgeConfigJson`):** Adicionada a coluna `badgeConfigJson TEXT` na tabela `clubs`.
+- **Migração de Banco (`MIGRATION_31_32`):** Versão do banco incrementada para `32` em `DatabaseContract.VERSION` com comando `ALTER TABLE clubs ADD COLUMN badgeConfigJson TEXT DEFAULT NULL`.
 
 ---
 
-### 3. Validações e Testes Automatizados (`PlayerValidationTest.kt`)
-- **`Foot`:** Valida que aceita exclusivamente `"R"`, `"L"`, string vazia `""` ou `null`.
-- **`Height`:** Valida que aceita inteiros entre `100` e `250` cm ou `null`.
+### 2. Componentes Vetoriais (`Canvas`)
+- **`BadgeShapeDrawer.kt`:** Desenha as 5 formas (`shield`, `circle`, `diamond`, `hexagon`, `crest`).
+- **`BadgePatternDrawer.kt`:** Aplica os 7 padrões visuais com clipping (`solid`, `vertical_stripes`, `horizontal_stripes`, `diagonal_stripes`, `half`, `cross`, `central_circle`).
+- **`BadgeSymbolDrawer.kt`:** Desenha os 7 símbolos centrais (`initial` [1ª letra], `star`, `crown`, `lightning`, `ball`, `tree`, `none`).
+- **`ClubBadge.kt`:** Composable unificado com preenchimento, padrão, símbolo central, borda e texto inicial.
+
+---
+
+### 3. Editor Visual de Escudo (`ClubsScreen.kt`)
+- Subpreenchimento do diálogo `ClubEditorDialog` acessado ao clicar no lápis do clube.
+- Controles interativos para forma, padrão, paleta compacta de cores e símbolo central.
+- **Preview ao vivo em tempo real** mostrando o escudo renderizado instantaneamente conforme as opções são selecionadas.
+
+---
+
+### 4. Tamanhos Padronizados nas Telas
+- **Lista de clubes (`ClubsScreen`):** `40.dp`
+- **Perfil do clube (`ClubProfileScreen`):** `80.dp`
+- **Jogos / Rodada (`ScheduleScreen` / `Dashboard`):** `32.dp`
+- **Tabela de Classificação (`StandingsScreen`):** `24.dp`
+
+---
+
+### 5. Testes Automatizados (`ClubBadgeConfigTest.kt`)
+- Valida os valores padrão de fallback.
+- Valida a extração da 1ª letra em maiúsculo (ex: `"Athletico Paranaense"` $\rightarrow$ `"A"` e `"Manchester United"` $\rightarrow$ `"M"`).
+- Valida a serialização e desserialização de/para JSON (`toJson` / `fromJson`).
 
 ---
 

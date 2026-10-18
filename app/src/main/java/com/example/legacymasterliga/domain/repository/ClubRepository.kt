@@ -15,6 +15,7 @@ interface ClubRepository {
         crestUri: String?,
         presidentUserId: Long?,
         initialBalance: Long = 0L,
+        badgeConfigJson: String? = null,
     ): Long
     suspend fun update(
         clubId: Long,
@@ -22,6 +23,7 @@ interface ClubRepository {
         name: String,
         crestUri: String?,
         presidentUserId: Long?,
+        badgeConfigJson: String? = null,
     )
     suspend fun delete(clubId: Long)
     suspend fun setActive(clubId: Long, isActive: Boolean)

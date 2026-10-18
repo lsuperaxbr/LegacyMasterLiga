@@ -36,6 +36,7 @@ data class ClubEntity(
     val leagueId: Long,
     val name: String,
     val crestUri: String? = null,
+    val badgeConfigJson: String? = null,
     val presidentUserId: Long? = null,
     val isBank: Boolean = false,
     val isActive: Boolean = true,

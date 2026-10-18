@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.legacymasterliga.domain.model.Club
+import com.example.legacymasterliga.domain.model.ClubBadgeConfig
+import com.example.legacymasterliga.core.ui.components.badge.ClubBadge
 import com.example.legacymasterliga.domain.model.League
 import com.example.legacymasterliga.domain.model.User
 import com.example.legacymasterliga.core.model.UserRole
@@ -274,7 +276,7 @@ private fun ClubCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ClubCrest(club.name, club.crestUri, modifier = Modifier.size(76.dp))
+            NativeCrest(club.name, club.crestUri, modifier = Modifier.size(40.dp), badgeConfigJson = club.badgeConfigJson)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -369,27 +371,31 @@ private fun ClubEditorDialog(
     onConfirm: (String, String?, Long?, Long) -> Unit,
 ) {
     var name by rememberSaveable(club?.id) { mutableStateOf(club?.name.orEmpty()) }
-    
-    // Decodifica o estado inicial
-    val initialData = remember(club?.id) { 
-        ClubCrestParser.decode(club?.crestUri, name)
+
+    val initialBadgeConfig = remember(club?.id) {
+        ClubBadgeConfig.fromJson(club?.badgeConfigJson, club?.crestUri, name)
     }
-    
-    var shape by rememberSaveable(club?.id) { mutableStateOf(initialData.shape) }
-    var colorFill by rememberSaveable(club?.id) { mutableStateOf(initialData.colorFill) }
-    var colorBorder by rememberSaveable(club?.id) { mutableStateOf(initialData.colorBorder) }
-    var pattern by rememberSaveable(club?.id) { mutableStateOf(initialData.pattern) }
-    var colorPattern by rememberSaveable(club?.id) { mutableStateOf(initialData.colorPattern) }
-    var showInitials by rememberSaveable(club?.id) { mutableStateOf(initialData.showInitials) }
-    var initials by rememberSaveable(club?.id) { mutableStateOf(initialData.initials) }
-    
+
+    var badgeShape by rememberSaveable(club?.id) { mutableStateOf(initialBadgeConfig.shape) }
+    var badgePattern by rememberSaveable(club?.id) { mutableStateOf(initialBadgeConfig.pattern) }
+    var primaryColor by rememberSaveable(club?.id) { mutableStateOf(initialBadgeConfig.primaryColor) }
+    var secondaryColor by rememberSaveable(club?.id) { mutableStateOf(initialBadgeConfig.secondaryColor) }
+    var accentColor by rememberSaveable(club?.id) { mutableStateOf(initialBadgeConfig.accentColor) }
+    var badgeSymbol by rememberSaveable(club?.id) { mutableStateOf(initialBadgeConfig.symbol) }
+
     var selectedPresidentId by rememberSaveable(club?.id) { mutableStateOf(club?.presidentUserId) }
     var initialBalance by rememberSaveable(club?.id) { mutableStateOf("") }
     var presidentMenuExpanded by remember { mutableStateOf(false) }
 
-    // Preview raw string
-    val currentCrestRaw = remember(shape, colorFill, colorBorder, pattern, colorPattern, showInitials, initials) {
-        ClubCrestParser.encode(shape, colorFill, colorBorder, pattern, colorPattern, showInitials, initials)
+    val currentBadgeConfig = remember(badgeShape, badgePattern, primaryColor, secondaryColor, accentColor, badgeSymbol) {
+        ClubBadgeConfig(
+            shape = badgeShape,
+            pattern = badgePattern,
+            primaryColor = primaryColor,
+            secondaryColor = secondaryColor,
+            accentColor = accentColor,
+            symbol = badgeSymbol
+        )
     }
 
     AlertDialog(
@@ -400,26 +406,24 @@ private fun ClubEditorDialog(
                 item {
                     // Preview e Formato
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        NativeCrest(name.ifBlank { "CL" }, currentCrestRaw, modifier = Modifier.size(80.dp))
+                        ClubBadge(config = currentBadgeConfig, clubName = name.ifBlank { "C" }, modifier = Modifier.size(80.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Formato", style = MaterialTheme.typography.labelMedium)
+                            Text("Forma do escudo", style = MaterialTheme.typography.labelMedium)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                ClubCrestParser.CrestShape.values().forEach { s ->
+                                listOf(
+                                    "shield" to "Escudo",
+                                    "circle" to "Círculo",
+                                    "diamond" to "Losango",
+                                    "hexagon" to "Hexágono",
+                                    "crest" to "Heráldico"
+                                ).forEach { (sKey, sLabel) ->
                                     FilterChip(
-                                        selected = shape == s,
-                                        onClick = { shape = s },
-                                        label = { 
-                                            Text(when(s) {
-                                                ClubCrestParser.CrestShape.CIRCLE -> "Círculo"
-                                                ClubCrestParser.CrestShape.SHIELD -> "Escudo"
-                                                ClubCrestParser.CrestShape.SHIELD_THIN -> "Escudo Fino"
-                                                ClubCrestParser.CrestShape.DIAMOND -> "Losango"
-                                                ClubCrestParser.CrestShape.OVAL -> "Oval"
-                                            })
-                                        }
+                                        selected = badgeShape == sKey,
+                                        onClick = { badgeShape = sKey },
+                                        label = { Text(sLabel) }
                                     )
                                 }
                             }
@@ -429,39 +433,40 @@ private fun ClubEditorDialog(
 
                 item {
                     // Seletor de Padrão
-                    Text("Padrão", style = MaterialTheme.typography.labelMedium)
+                    Text("Padrão visual", style = MaterialTheme.typography.labelMedium)
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        ClubCrestParser.CrestPattern.values().forEach { p ->
+                        listOf(
+                            "solid" to "Sólido",
+                            "vertical_stripes" to "Listras V",
+                            "horizontal_stripes" to "Listras H",
+                            "diagonal_stripes" to "Diagonal",
+                            "half" to "Meio",
+                            "cross" to "Cruz",
+                            "central_circle" to "Círculo C."
+                        ).forEach { (pKey, pLabel) ->
                             FilterChip(
-                                selected = pattern == p,
-                                onClick = { pattern = p },
-                                label = { 
-                                    Text(when(p) {
-                                        ClubCrestParser.CrestPattern.NONE -> "Nenhum"
-                                        ClubCrestParser.CrestPattern.STRIPES_VERTICAL -> "Listras V"
-                                        ClubCrestParser.CrestPattern.STRIPES_HORIZONTAL -> "Listras H"
-                                        ClubCrestParser.CrestPattern.DIAGONAL -> "Diagonal"
-                                    })
-                                }
+                                selected = badgePattern == pKey,
+                                onClick = { badgePattern = pKey },
+                                label = { Text(pLabel) }
                             )
                         }
                     }
                 }
 
                 item {
-                    // Seletor Cor de Fundo
-                    Text("Cor de Fundo", style = MaterialTheme.typography.labelMedium)
+                    // Cor Primária
+                    Text("Cor Primária", style = MaterialTheme.typography.labelMedium)
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ClubCrestParser.AVAILABLE_COLORS.forEach { (hex, label) ->
+                        ClubBadgeConfig.PALETTE_COLORS.forEach { (hex, label) ->
                             FilterChip(
-                                selected = colorFill == hex,
-                                onClick = { colorFill = hex },
+                                selected = primaryColor == hex,
+                                onClick = { primaryColor = hex },
                                 label = { Text(label) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = Color(android.graphics.Color.parseColor(hex)),
@@ -473,16 +478,16 @@ private fun ClubEditorDialog(
                 }
 
                 item {
-                    // Seletor Cor da Borda
-                    Text("Cor da Borda", style = MaterialTheme.typography.labelMedium)
+                    // Cor Secundária
+                    Text("Cor Secundária", style = MaterialTheme.typography.labelMedium)
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ClubCrestParser.AVAILABLE_COLORS.forEach { (hex, label) ->
+                        ClubBadgeConfig.PALETTE_COLORS.forEach { (hex, label) ->
                             FilterChip(
-                                selected = colorBorder == hex,
-                                onClick = { colorBorder = hex },
+                                selected = secondaryColor == hex,
+                                onClick = { secondaryColor = hex },
                                 label = { Text(label) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = Color(android.graphics.Color.parseColor(hex)),
@@ -493,47 +498,49 @@ private fun ClubEditorDialog(
                     }
                 }
 
-                if (pattern != ClubCrestParser.CrestPattern.NONE) {
-                    item {
-                        // Seletor Cor do Padrão
-                        Text("Cor do Padrão", style = MaterialTheme.typography.labelMedium)
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ClubCrestParser.AVAILABLE_COLORS.forEach { (hex, label) ->
-                                FilterChip(
-                                    selected = colorPattern == hex,
-                                    onClick = { colorPattern = hex },
-                                    label = { Text(label) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(android.graphics.Color.parseColor(hex)),
-                                        selectedLabelColor = if (hex == "#FFD700" || hex == "#00E6C8" || hex == "#FFFFFF") Color.Black else Color.White
-                                    )
+                item {
+                    // Cor de Destaque
+                    Text("Cor de Destaque", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ClubBadgeConfig.PALETTE_COLORS.forEach { (hex, label) ->
+                            FilterChip(
+                                selected = accentColor == hex,
+                                onClick = { accentColor = hex },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(android.graphics.Color.parseColor(hex)),
+                                    selectedLabelColor = if (hex == "#FFD700" || hex == "#00E6C8" || hex == "#FFFFFF") Color.Black else Color.White
                                 )
-                            }
+                            )
                         }
                     }
                 }
 
                 item {
-                    // Toggle Iniciais e Campo de Texto
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Mostrar iniciais", style = MaterialTheme.typography.bodyMedium)
-                        Switch(checked = showInitials, onCheckedChange = { showInitials = it })
-                    }
-                }
-
-                if (showInitials) {
-                    item {
-                        OutlinedTextField(
-                            value = initials,
-                            onValueChange = { if (it.length <= 3) initials = it.uppercase() },
-                            label = { Text("Iniciais (Máx 3)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            placeholder = { Text(ClubCrestParser.defaultInitials(name)) }
-                        )
+                    // Símbolo Central
+                    Text("Símbolo Central", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            "initial" to "Inicial",
+                            "star" to "Estrela",
+                            "crown" to "Coroa",
+                            "lightning" to "Raio",
+                            "ball" to "Bola",
+                            "tree" to "Árvore",
+                            "none" to "Nenhum"
+                        ).forEach { (symKey, symLabel) ->
+                            FilterChip(
+                                selected = badgeSymbol == symKey,
+                                onClick = { badgeSymbol = symKey },
+                                label = { Text(symLabel) }
+                            )
+                        }
                     }
                 }
 
@@ -601,11 +608,10 @@ private fun ClubEditorDialog(
         },
         confirmButton = {
             Button(
-                onClick = { 
-                    val savedInitials = initials.ifBlank { ClubCrestParser.defaultInitials(name) }
-                    val finalCrest = ClubCrestParser.encode(shape, colorFill, colorBorder, pattern, colorPattern, showInitials, savedInitials)
-                    onConfirm(name, finalCrest, selectedPresidentId, initialBalance.toLongOrNull() ?: 0L) 
-                }, 
+                onClick = {
+                    val finalBadgeJson = ClubBadgeConfig.toJson(currentBadgeConfig)
+                    onConfirm(name, finalBadgeJson, selectedPresidentId, initialBalance.toLongOrNull() ?: 0L)
+                },
                 enabled = name.trim().length >= 2
             ) {
                 Text("Salvar")
