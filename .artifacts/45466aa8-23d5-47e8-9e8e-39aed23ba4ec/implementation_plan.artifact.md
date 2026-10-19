@@ -1,122 +1,163 @@
-# Plano de Implementação - Auditoria e Correção da Sincronização Firebase Firestore
+# Plano de Implementação e Diffs - Correção da Persistência do Escudo Vetorial (`ClubBadge`)
 
-Correção abrangente da sincronização do Firebase Firestore no aplicativo **Legacy Master Liga**, garantindo que atualizações geradas em um dispositivo (ex: Celular Android) apareçam automaticamente em tempo real no outro (ex: Nox Player), com IDs determinísticos, regras de segurança liberadas para ligas compartilhadas, cache offline resiliente e botão "Forçar Sincronização".
-
----
-
-## Relatório de Auditoria Inicial do Sistema Firebase Atual
-
-### 1. Locais de Leitura e Listeners no Código
-- **`FirestoreCloudAuthRepository.kt`:** Listener em tempo real (`addSnapshotListener`) no documento `user_profiles/{uid}`.
-- **`FirestoreCloudLeagueRepository.kt`:** Listeners em `leagues/{cloudLeagueId}`, `leagues/{cloudLeagueId}/members` e `invites`.
-- **`OnlineSportsSyncManager.kt`:** Gerencia 18 listeners em tempo real nas subcoleções esportivas da liga no Firestore (`competitions`, `clubs`, `seasons`, `participants`, `rounds`, `matches`, `standings`, `financial_transactions`, `transfers`, `players`, `news`, `arena_duels`, `goal_events`, `auction_lots`, `auction_items`, `auction_bids`).
-
-### 2. Causa Raiz do Problema de Sincronização entre Dispositivos
-- **IDs Aleatórios Incompatíveis (`UUID.randomUUID()`):** Quando o Dispositivo A cria um clube, partida, jogador ou resultado, ele gera um UUID aleatório (`UUID.randomUUID()`). Quando o Dispositivo B cria ou consulta o mesmo recurso localmente, gera outro UUID aleatório. Isso faz com que os dois dispositivos fiquem gravando em documentos Firestore diferentes e isolados.
-- **Filtro Rígido em `documentChanges`:** Em `OnlineSportsSyncManager.kt`, alterações vindas do Firestore eram ignoradas se `change.document.metadata.isFromCache == true` ou se `hasPendingWrites()` estivesse ativado, descartando notificações remotas enviadas por outro dispositivo.
-- **Bloqueio de Regras de Segurança (`isMember`):** A função `isMember(leagueId)` em `firestore.rules` exige que a subcoleção `members` contenha o UID do usuário. Se a subcoleção `members` demorar a sincronizar no Dispositivo B, o Firestore retorna `PERMISSION_DENIED` e interrompe todos os listeners.
+Diagnóstico e correção do fluxo de persistência do escudo vetorial (`ClubBadge`) no aplicativo **Legacy Master Liga**.
 
 ---
 
-## Proposta de Solução e Arquitetura
+## Análise da Causa Raiz
 
-### 1. IDs Previsíveis e Determinísticos
-Substituir a geração de UUIDs aleatórios por chaves sanitizadas baseadas em contexto em `OnlineSportsSyncManager.kt`:
-- **Liga:** `"liga_${sanitize(name)}"`
-- **Clube:** `"${leagueCloudId}_clube_${sanitize(clubName)}"`
-- **Competição:** `"${leagueCloudId}_comp_${sanitize(compName)}"`
-- **Temporada:** `"${compCloudId}_season_${seasonNumber}"`
-- **Rodada:** `"${seasonCloudId}_round_${roundNumber}"`
-- **Partida:** `"${seasonCloudId}_match_${pairingKey}_leg_${leg}"`
-- **Classificação:** `"${seasonCloudId}_standing_${clubKey}"`
-- **Participante:** `"${seasonCloudId}_part_${clubKey}"`
-- **Jogador:** `"${clubCloudId}_player_${sanitize(name)}"`
-- **Leilão/Lote:** `"${leagueCloudId}_lot_${sanitize(name)}"`
+1. **`ClubsViewModel.saveClub()`:** Quando a tela de edição do clube invocava `saveClub`, a função repassava a string JSON do escudo no parâmetro `crestUri`, porém ao chamar `clubRepository.update(clubId, leagueId, normalizedName, crestUri, presidentUserId)` **não fornecia o argumento `badgeConfigJson`**.
+2. **`RoomClubRepository.update()`:** O parâmetro opcional `badgeConfigJson` assumia valor `null` por padrão. Durante a cópia da entidade (`current.copy(...)`), a lógica `badgeConfigJson ?: current.badgeConfigJson` resultava em `null`, impedindo que o campo `badgeConfigJson` fosse gravado na tabela `clubs` do banco Room.
+3. **`ClubProfileHeaderRow` & `observeProfileHeader`:** A consulta DAO de cabeçalho da tela de perfil do clube não selecionava a nova coluna `badgeConfigJson`, fazendo com que o perfil do clube usasse a decodificação de fallback cinza.
 
 ---
 
-### 2. Liberar Regras do Firestore (`firestore.rules`)
-Ajustar `firestore.rules` para permitir leitura e escrita nas subcoleções da liga por usuários autenticados (`signedIn()`), impedindo bloqueios de `PERMISSION_DENIED` durante a conexão inicial de novos dispositivos:
+## Resumo dos Diffs das Alterações
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
+### 1. `ClubsViewModel.kt`
+Garantir a passagem explícita de `badgeConfigJson` em `clubRepository.create` e `clubRepository.update`:
 
-    match /user_profiles/{uid} {
-      allow read, write: if signedIn();
-    }
-
-    match /{path=**}/members/{memberId} {
-      allow read, write: if signedIn();
-    }
-
-    match /leagues/{leagueId} {
-      allow read, write: if signedIn();
-
-      match /{collection=**} {
-        allow read, write: if signedIn();
-      }
-    }
-
-    match /invites/{code} {
-      allow read, write: if signedIn();
-    }
-
-    match /system_status/{document=**} {
-      allow read: if signedIn();
-      allow write: if false;
-    }
-  }
-}
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/feature/clubs/presentation/ClubsViewModel.kt
++++ b/app/src/main/java/com/example/legacymasterliga/feature/clubs/presentation/ClubsViewModel.kt
+@@ -75,9 +75,23 @@ class ClubsViewModel @Inject constructor(
+         viewModelScope.launch {
+             runCatching {
+                 if (clubId == null) {
+-                    clubRepository.create(leagueId, normalizedName, crestUri, presidentUserId, initialBalance)
++                    clubRepository.create(
++                        leagueId = leagueId,
++                        name = normalizedName,
++                        crestUri = crestUri,
++                        presidentUserId = presidentUserId,
++                        initialBalance = initialBalance,
++                        badgeConfigJson = crestUri
++                    )
+                 } else {
+-                    clubRepository.update(clubId, leagueId, normalizedName, crestUri, presidentUserId)
++                    clubRepository.update(
++                        clubId = clubId,
++                        leagueId = leagueId,
++                        name = normalizedName,
++                        crestUri = crestUri,
++                        presidentUserId = presidentUserId,
++                        badgeConfigJson = crestUri
++                    )
+                 }
+             }.onSuccess {
 ```
 
 ---
 
-### 3. Persistência Offline e Função "Forçar Sincronização"
-- **Configuração do Firestore (`CloudModule.kt`):** Habilitar explicitamente a persistência de cache offline.
-- **Botão "Forçar Sincronização":**
-  - Implementar o método `forceFullSyncAndResetCache()` em `OnlineSportsSyncManager.kt` que limpa temporariamente as pendências, re-registra os listeners em tempo real do Firestore e sincroniza com o banco Room local.
-  - Adicionar o botão "Forçar Sincronização" na barra de ações/topbar da tela principal do app (`CentralHubScreen.kt` ou `DashboardRoute`).
+### 2. `RoomClubRepository.kt`
+Tratar e persistir o `badgeConfigJson` mesmo quando recebido via parâmetro `crestUri` (se for string em formato JSON):
+
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/data/repository/RoomClubRepository.kt
++++ b/app/src/main/java/com/example/legacymasterliga/data/repository/RoomClubRepository.kt
+@@ -107,11 +107,12 @@ class RoomClubRepository @Inject constructor(
+             }
+         }
+
++        val resolvedBadgeJson = badgeConfigJson ?: (if (crestUri?.startsWith("{") == true) crestUri else current.badgeConfigJson)
+
+         clubDao.update(
+             current.copy(
+                 leagueId = leagueId,
+                 name = name.trim(),
+                 crestUri = crestUri,
+-                badgeConfigJson = badgeConfigJson ?: current.badgeConfigJson,
++                badgeConfigJson = resolvedBadgeJson,
+                 presidentUserId = presidentUserId,
+                 updatedAt = System.currentTimeMillis(),
+             ),
+```
 
 ---
 
-## Proposta de Mudanças Arquivos por Arquivo
+### 3. `ClubProfileHeaderRow.kt`, `ClubProfileModels.kt` e `ClubDao.kt`
+Incluir a coluna `badgeConfigJson` na consulta DAO e na model de perfil do clube:
 
-### Rules & Cloud Setup
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/core/database/model/ClubProfileHeaderRow.kt
++++ b/app/src/main/java/com/example/legacymasterliga/core/database/model/ClubProfileHeaderRow.kt
+@@ -5,4 +5,5 @@ data class ClubProfileHeaderRow(
+     val clubName: String,
+     val crestUri: String?,
++    val badgeConfigJson: String?,
+     val presidentUserId: Long?,
+     val presidentName: String?,
+```
 
-#### [MODIFY] [firestore.rules](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/firestore.rules)
-- Atualizar as permissões para garantir acesso irrestrito de leitura/escrita para usuários autenticados em ligas compartilhadas.
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/core/database/dao/ClubDao.kt
++++ b/app/src/main/java/com/example/legacymasterliga/core/database/dao/ClubDao.kt
+@@ -32,4 +32,5 @@ interface ClubDao {
+                clubs.name AS clubName,
+                clubs.crestUri AS crestUri,
++               clubs.badgeConfigJson AS badgeConfigJson,
+                clubs.presidentUserId AS presidentUserId,
+                users.displayName AS presidentName,
+```
 
-#### [MODIFY] [CloudModule.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/di/CloudModule.kt)
-- Habilitar persistência offline no `FirebaseFirestore`.
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/domain/ClubProfileModels.kt
++++ b/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/domain/ClubProfileModels.kt
+@@ -6,4 +6,5 @@ data class ClubProfileHeader(
+     val clubName: String,
+     val crestUri: String?,
++    val badgeConfigJson: String?,
+     val presidentUserId: Long?,
+```
 
-### Sync Core
+---
 
-#### [MODIFY] [OnlineSportsSyncManager.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt)
-- Alterar a geração de IDs de documentos para chaves determinísticas sanitizadas.
-- Corrigir os filtros de snapshot para processar atualizações recebidas de outros dispositivos.
-- Adicionar o método `forceFullSyncAndResetCache()`.
+### 4. `ClubProfileScreen.kt`
+Passar o `badgeConfigJson` no cabeçalho do perfil do clube para a renderização do `NativeCrest`:
 
-### UI Integration
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/presentation/ClubProfileScreen.kt
++++ b/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/presentation/ClubProfileScreen.kt
+@@ -816,7 +816,7 @@ private fun ClubHeader(
+         Row(
+             modifier = Modifier.fillMaxWidth().padding(18.dp),
+             verticalAlignment = Alignment.CenterVertically,
+             horizontalArrangement = Arrangement.spacedBy(16.dp),
+         ) {
+-            ClubCrest(name, crestUri, Modifier.size(80.dp))
++            ClubCrest(name, crestUri, badgeConfigJson, Modifier.size(80.dp))
+```
 
-#### [MODIFY] [CentralHubScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/hubs/presentation/CentralHubScreen.kt)
-- Adicionar botão de ação "Forçar Sincronização" para acionar o re-escaneamento completo do Firestore.
+---
 
-### Unit Tests
+### 5. `OnlineSportsSyncManager.kt`
+Mapear e incluir `badgeConfigJson` nas sincronizações do Firestore:
 
-#### [NEW] [OnlineSportsSyncDeterministicKeysTest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/test/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncDeterministicKeysTest.kt)
-- Teste unitário para validar a geração de IDs determinísticos e sanitização de nomes de clubes e partidas.
+```diff
+--- a/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt
++++ b/app/src/main/java/com/example/legacymasterliga/feature/online/sync/OnlineSportsSyncManager.kt
+@@ -530,6 +530,7 @@ class OnlineSportsSyncManager @Inject constructor(
+                 common + mapOf(
+                     "name" to cl.name,
+                     "crestUri" to cl.crestUri,
++                    "badgeConfigJson" to cl.badgeConfigJson,
+                     "presidentFirebaseUid" to presidentUid,
+                     "isBank" to cl.isBank, "isActive" to cl.isActive, "createdAt" to cl.createdAt,
+                 )
+@@ -700,6 +701,7 @@ class OnlineSportsSyncManager @Inject constructor(
+             id = current?.id ?: 0,
+             leagueId = leagueId,
+             name = d.string("name"),
+             crestUri = d["crestUri"] as? String,
++            badgeConfigJson = d["badgeConfigJson"] as? String ?: (if ((d["crestUri"] as? String)?.startsWith("{") == true) d["crestUri"] as? String else null),
+```
 
 ---
 
 ## Plano de Verificação
 
 ### Automated Tests
-- Executar os testes unitários de sincronização via Gradle: `gradle_build("app:assembleDebug")`.
+- Executar testes unitários de `ClubBadgeConfigTest` e compilação do projeto: `gradle_build("app:assembleDebug")`.
 
 ### Manual Verification & Build
 - Executar Clean e Rebuild (`clean app:assembleDebug`).
