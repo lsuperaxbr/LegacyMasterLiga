@@ -394,6 +394,22 @@ class OnlineSportsSyncManager @Inject constructor(
         }
     }
 
+    fun forceFullSyncAndResetCache(onComplete: (() -> Unit)? = null) {
+        scope.launch {
+            syncLog("FORÇANDO SINCRONIZAÇÃO TOTAL E RECARGA DE LISTENERS DO FIRESTORE...")
+            listeners.values.flatten().forEach { it.remove() }
+            listeners.clear()
+
+            refreshMemberships()
+
+            val leagueIds = activeMembershipLeagueIds
+            leagueIds.forEach { leagueId ->
+                pullAll(leagueId)
+            }
+            onComplete?.invoke()
+        }
+    }
+
     /** Força o re-escaneamento de ligas e cargas iniciais imediatamente. */
     fun refreshImmediately() {
         scope.launch { refreshMemberships() }
@@ -467,15 +483,49 @@ class OnlineSportsSyncManager @Inject constructor(
         flushQueue()
     }
 
+    fun generateDeterministicPairingKey(homeName: String, awayName: String): String {
+        val sortedNames = listOf(clubKey(homeName), clubKey(awayName)).sorted()
+        return "${sortedNames[0]}_vs_${sortedNames[1]}"
+    }
+
     private suspend fun ensureRecord(candidate: OnlineSyncCandidate): OnlineSyncRecordEntity {
         syncDao.findRecord(candidate.entityType, candidate.localId)?.let { return it }
 
         var cloudId = UUID.randomUUID().toString()
 
-        // Idempotência: Para transações financeiras, usamos a chave determinística se existir
-        if (candidate.entityType == "FINANCE") {
-            financialDao.findById(candidate.localId)?.idempotencyKey?.let { key ->
-                cloudId = key
+        when (candidate.entityType) {
+            "CLUB" -> {
+                clubDao.findById(candidate.localId)?.let { club ->
+                    cloudId = "${candidate.cloudLeagueId}_clube_${clubKey(club.name)}"
+                }
+            }
+            "PLAYER" -> {
+                playerDao.findById(candidate.localId)?.let { p ->
+                    val clubRecord = ensureRecord("CLUB", p.clubId, candidate.cloudLeagueId)
+                    val suffix = p.shirtNumber?.toString() ?: p.id.toString()
+                    cloudId = "${clubRecord.cloudId}_player_${clubKey(p.name)}_$suffix"
+                }
+            }
+            "COMPETITION" -> {
+                competitionDao.findById(candidate.localId)?.let { c ->
+                    cloudId = "${candidate.cloudLeagueId}_comp_${clubKey(c.name)}"
+                }
+            }
+            "MATCH" -> {
+                matchDao.findById(candidate.localId)?.let { m ->
+                    val season = ensureRecord("SEASON", m.seasonId, candidate.cloudLeagueId)
+                    val home = clubDao.findById(m.homeClubId)
+                    val away = clubDao.findById(m.awayClubId)
+                    if (home != null && away != null) {
+                        val pairing = generateDeterministicPairingKey(home.name, away.name)
+                        cloudId = "${season.cloudId}_match_${pairing}_leg_${m.leg}"
+                    }
+                }
+            }
+            "FINANCE" -> {
+                financialDao.findById(candidate.localId)?.idempotencyKey?.let { key ->
+                    cloudId = key
+                }
             }
         }
 

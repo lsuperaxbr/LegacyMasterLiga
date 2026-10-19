@@ -50,6 +50,6 @@ class LeagueHubViewModel @Inject constructor(
     }
 
     fun forceRefresh() {
-        onlineSportsSyncManager.triggerFullSync()
+        onlineSportsSyncManager.forceFullSyncAndResetCache()
     }
 }

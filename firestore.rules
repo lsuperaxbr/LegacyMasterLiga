@@ -21,13 +21,13 @@ service cloud.firestore {
 
     match /leagues/{leagueId} {
       allow read: if signedIn();
-      allow write: if signedIn(); // Simplificado para RC1; controle via App Logic
+      allow write: if signedIn();
 
       match /members/{uid} {
         allow read, write: if signedIn();
       }
 
-      match /{collection}/{documentId} {
+      match /{collection=**} {
         allow read, write: if isMember(leagueId);
       }
     }
