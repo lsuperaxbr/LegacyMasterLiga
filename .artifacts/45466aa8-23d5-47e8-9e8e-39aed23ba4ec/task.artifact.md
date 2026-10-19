@@ -1,11 +1,16 @@
-# Task List - Importação de Elenco por Pasta (`ImportSquadFromFolderScreen`)
+# Task List - Auditoria e Correção da Sincronização Firestore
 
-- [x] Commit e push inicial (antes das alterações de código)
-- [x] Criar `Pes6PlayerTextParser.kt` (parser com suporte a arquivos mínimos/completos, atributos faltantes padrão 50 e Foot/Height nulos)
-- [x] Atualizar `PlayerDao.kt`, `PlayerRepository.kt` e `RoomPlayerRepository.kt` (adicionar `deleteByClub` e verificação de partidas jogadas no clube)
-- [x] Criar `ImportSquadFromFolderUseCase.kt` (verificação de partidas, transação atômica Room, leitura via SAF DocumentFile e relatório de importados/ignorados/erros)
-- [x] Criar `ImportSquadFromFolderViewModel.kt` e `ImportSquadFromFolderScreen.kt` (interface Compose com seletor de clube, acionamento SAF `ACTION_OPEN_DOCUMENT_TREE`, progresso e relatório)
-- [x] Integrar rota em `LegacyDestination.kt`, `LegacyNavGraph.kt` e adicionar o botão na aba Elenco de `ClubProfileScreen.kt`
-- [x] Criar testes unitários em `ImportSquadFromFolderUseCaseTest.kt`
-- [x] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
-- [x] Criar walkthrough e executar commit e push final no GitHub ("feat: importação de elenco por pasta TXT (SAF), parser PES6 e substituição atômica de elenco")
+- [/] Commit e push inicial (antes das alterações de código)
+- [ ] Atualizar `firestore.rules` (manter `isMember` com acesso seguro para membros vinculados)
+- [ ] Atualizar `FirestoreCloudLeagueRepository.kt` (garantir vínculo e transação de membros na criação/entrada por convite)
+- [ ] Atualizar `OnlineSportsSyncManager.kt`:
+  - IDs determinísticos previsíveis (Jogador: `"${clubCloudId}_player_${sanitize(name)}_${shirtNumberOrLocalId}"`)
+  - Ordenação alfabética de nomes de clubes na geração do `pairingKey` das partidas
+  - Filtro e idempotência de cache x servidor sem duplicar ações
+  - Habilitar logs detalhados de sincronização (`syncLog`)
+  - Implementar o método `forceFullSyncAndResetCache()`
+- [ ] Atualizar `CloudModule.kt` (configuração explícita de cache offline do Firestore)
+- [ ] Atualizar `CentralHubScreen.kt` (adicionar botão "Forçar Sincronização" e indicador visual de sync pendente)
+- [ ] Criar testes unitários em `OnlineSportsSyncDeterministicKeysTest.kt`
+- [ ] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
+- [ ] Criar walkthrough e executar commit e push final no GitHub ("fix(sync): sincronização Firestore em tempo real com IDs determinísticos, ordenação alfabética de confrontos e trava de segurança isMember")
