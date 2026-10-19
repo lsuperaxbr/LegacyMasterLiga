@@ -1,113 +1,109 @@
-# Plano de Implementação - Sistema Vetorial de Escudos (`ClubBadge`)
+# Plano de Implementação - Importação de Elenco por Pasta (`ImportSquadFromFolderScreen`)
 
-Evolução do editor e sistema de renderização de escudos do aplicativo **Legacy Master Liga**, substituindo a lógica atual por um motor vetorial completo baseado em Compose Canvas, formas geométricas, padrões, paleta de cores e símbolos centrais (`ClubBadgeConfig`).
+Implementação da funcionalidade de importação completa de elenco a partir de uma pasta local contendo arquivos `.txt` individuais por jogador, com tratamento de permissões Android, seleção de diretório via SAF (`ACTION_OPEN_DOCUMENT_TREE`), parser resiliente, estratégia de substituição completa de elenco (`wipe squad`) e testes automatizados.
 
 ---
 
 ## Estrutura do Recurso e Regras de Negócio
 
-### 1. Modelo de Dados (`ClubBadgeConfig.kt`)
-Data class para representar a configuração do escudo:
-```kotlin
-data class ClubBadgeConfig(
-    val shape: String = "shield",          // "shield", "circle", "diamond", "hexagon", "crest"
-    val pattern: String = "solid",         // "solid", "vertical_stripes", "horizontal_stripes", "diagonal_stripes", "half", "cross", "central_circle"
-    val primaryColor: String = "#808080",  // HEX
-    val secondaryColor: String = "#FFFFFF",// HEX
-    val accentColor: String = "#000000",   // HEX
-    val symbol: String = "initial"         // "initial", "star", "crown", "lightning", "ball", "tree", "none"
-)
-```
-- **Codificação/Decodificação:** Métodos para converter de/para string formatada no campo `crestUri` da tabela de clubes (garantindo compatibilidade com o banco de dados Room sem necessidade de alterar schemas SQL).
-- **Valores Padrão para Clubes Existentes:** `shape = "shield"`, `pattern = "solid"`, `primaryColor = "#808080"`, `secondaryColor = "#FFFFFF"`, `accentColor = "#000000"`, `symbol = "initial"`.
+### 1. Permissões Android
+- **`AndroidManifest.xml`:**
+  - Adição da permissão `<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />`.
+  - Tratamento runtime de solicitação de permissão no Compose / Activity para Android 6+.
 
 ---
 
-### 2. Componentes Vetoriais de Desenho (Canvas)
-
-- **`BadgeShapeDrawer.kt`:**
-  - Gera paths fechados para as 5 formas geométricas suportadas:
-    - `shield` (Escudo clássico curvado)
-    - `circle` (Círculo perfeito)
-    - `diamond` (Losango)
-    - `hexagon` (Hexágono regular)
-    - `crest` (Escudo heráldico tradicional com topo reto)
-
-- **`BadgePatternDrawer.kt`:**
-  - Aplica padrões visuais recortados (`clipPath`) dentro da forma com a `secondaryColor`:
-    - `solid` (Preenchimento uniforme)
-    - `vertical_stripes` (Listras verticais alternadas)
-    - `horizontal_stripes` (Listras horizontais alternadas)
-    - `diagonal_stripes` (Listras diagonais)
-    - `half` (Bipartido meio a meio)
-    - `cross` (Cruz centrada)
-    - `central_circle` (Círculo central interno)
-
-- **`BadgeSymbolDrawer.kt`:**
-  - Desenha os símbolos centrais em `accentColor`:
-    - `initial` (Inicial do nome do clube)
-    - `star` (Estrela de 5 pontas)
-    - `crown` (Coroa)
-    - `lightning` (Raio/Relâmpago)
-    - `ball` (Bola de futebol vetorial)
-    - `tree` (Árvore/Pinho)
-    - `none` (Nenhum símbolo)
-
-- **`ClubBadge.kt`:**
-  - Composable principal que junta a forma base preenchida com `primaryColor`, o padrão recortado em `secondaryColor`, o símbolo central em `accentColor` e a borda externa sutil para definição.
+### 2. Parser de Jogador (`Pes6PlayerTextParser.kt`)
+- Lê o texto do arquivo `.txt` individual.
+- Normaliza chaves (removendo espaços e sublinhados, e convertendo para minúsculas).
+- Extrai:
+  - `Name`, `Position`, `OVR`, `Age`
+  - `Foot` (aceita `"R"` / `"L"` / em branco $\rightarrow$ salva `null`)
+  - `Height` (aceita faixa 100..250 $\rightarrow$ salva `null` se ausente/inválido)
+  - 26 atributos numéricos do PES 6.
+- Retorna um objeto `ParsedPlayer` pronto para virar `PlayerEntity`.
 
 ---
 
-### 3. Editor de Escudo na Tela de Edição (`ClubsScreen.kt`)
-Substituição do editor em `ClubEditorDialog` pelos novos controles interativos com **Preview em Tempo Real**:
-- **Forma do Escudo:** Chips/Radio com rótulos e seletores para as 5 formas.
-- **Padrão:** Chips/Radio para os 7 padrões de preenchimento.
-- **Cores:** Paletas compactas de seleção para Cor Primária, Cor Secundária e Cor de Destaque.
-- **Símbolo Central:** Chips/Radio para os 7 símbolos suportados.
+### 3. Caso de Uso de Importação (`ImportSquadFromFolderUseCase.kt`)
+- Recebe o `clubId` e a `folderUri` (`Uri`).
+- **Substituição Completa do Elenco (Wipe):**
+  - Executa `playerDao.deleteByClub(clubId)`, removendo todos os jogadores existentes no clube.
+  - Não utiliza o nome do jogador como chave de desduplicação, garantindo que atletas com nomes idênticos no mesmo clube sejam criados como registros independentes.
+- **Varredura da Pasta:**
+  - Utiliza `DocumentFile.fromTreeUri(context, folderUri)`.
+  - Filtra estritamente arquivos com extensão `.txt` (ignorando outros formatos).
+- **Inclusão no Banco:**
+  - Para cada arquivo `.txt`, executa o parser e insere um novo `PlayerEntity` vinculado ao `clubId`.
+  - Retorna relatório `ImportSquadResult(importedCount, failedFiles)`.
 
 ---
 
-### 4. Padronização nos Tamanhos do App
-Atualização do `NativeCrest.kt` / `ClubBadge` para renderização em todos os pontos do app com dimensões padronizadas:
-- **Perfil do clube (`ClubProfileScreen`):** `80.dp`
-- **Lista de clubes (`ClubsScreen`):** `40.dp`
-- **Jogos / Rodada / Partidas (`ScheduleScreen` / `Dashboard`):** `32.dp`
-- **Tabela de Classificação (`StandingsScreen`):** `24.dp`
+### 4. Interface do Usuário (`ImportSquadFromFolderScreen.kt` & `ImportSquadFromFolderViewModel.kt`)
+- **Seletor de Clube:** Dropdown com a lista de clubes da liga ativa.
+- **Seletor de Pasta:** Botão "Selecionar pasta do clube" acionando `Intent.ACTION_OPEN_DOCUMENT_TREE` via `rememberLauncherForActivityResult`.
+- **Botão "Importar elenco":** Processa a importação em segundo plano (`Dispatchers.IO`) com indicador de progresso.
+- **Resumo do Resultado:** Exibe o número de jogadores importados com sucesso e a lista de arquivos que falharam.
+
+---
+
+### 5. Navegação & Ponto de Acesso
+- **Rota:** `LegacyDestination.ImportSquadFromFolder` (`"import_squad_from_folder?clubId={clubId}"`).
+- **Navegação:** Registrada no `LegacyNavGraph.kt`.
+- **Botão na Tela de Perfil do Clube (`ClubProfileScreen.kt`):** Adicionado o botão "Importar pasta do clube" na aba **Elenco**.
 
 ---
 
 ## Proposta de Mudanças Arquivos por Arquivo
 
-### Domain & UI Components
+### Core & Permissions
 
-#### [NEW] [ClubBadgeConfig.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/domain/model/ClubBadgeConfig.kt)
-- Classe de dados, valores padrão e funções de codificação/decodificação para o campo `crestUri`.
+#### [MODIFY] [AndroidManifest.xml](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/AndroidManifest.xml)
+- Adicionar permissão `READ_EXTERNAL_STORAGE`.
 
-#### [NEW] [BadgeShapeDrawer.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/BadgeShapeDrawer.kt)
-- Desenhador vetorial das formas geométricas (`shield`, `circle`, `diamond`, `hexagon`, `crest`).
+#### [MODIFY] [PlayerDao.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/database/dao/PlayerDao.kt)
+- Adicionar query de deleção total do elenco por clube: `@Query("DELETE FROM players WHERE clubId = :clubId") suspend fun deleteByClub(clubId: Long)`.
 
-#### [NEW] [BadgePatternDrawer.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/BadgePatternDrawer.kt)
-- Desenhador dos 7 padrões visuais com clipping na forma.
+#### [MODIFY] [PlayerRepository.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/domain/repository/PlayerRepository.kt) & [RoomPlayerRepository.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/data/repository/RoomPlayerRepository.kt)
+- Adicionar método `deletePlayersByClub(clubId: Long)`.
 
-#### [NEW] [BadgeSymbolDrawer.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/BadgeSymbolDrawer.kt)
-- Desenhador dos símbolos centrais vetoriais (`initial`, `star`, `crown`, `lightning`, `ball`, `tree`, `none`).
+### Feature / Squad Folder Import
 
-#### [NEW] [ClubBadge.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/badge/ClubBadge.kt)
-- Composable principal do escudo vetorial.
+#### [NEW] [Pes6PlayerTextParser.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/attributes/domain/Pes6PlayerTextParser.kt)
+- Parser dos arquivos `.txt` individuais de jogadores.
 
-#### [MODIFY] [NativeCrest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/ui/components/NativeCrest.kt)
-- Atualizar para integrar e delegar o desenho para o novo `ClubBadge`.
+#### [NEW] [ImportSquadFromFolderUseCase.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/attributes/domain/ImportSquadFromFolderUseCase.kt)
+- Caso de uso para apagar o elenco antigo, varrer a pasta e criar novos registros.
 
-#### [MODIFY] [ClubsScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/clubs/presentation/ClubsScreen.kt)
-- Atualizar o diálogo de edição do clube (`ClubEditorDialog`) com o novo editor de forma, padrão, cores e símbolo com preview em tempo real.
+#### [NEW] [ImportSquadFromFolderViewModel.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/attributes/presentation/ImportSquadFromFolderViewModel.kt)
+- ViewModel com gerenciamento de estado do fluxo de seleção de pasta e importação.
+
+#### [NEW] [ImportSquadFromFolderScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/attributes/presentation/ImportSquadFromFolderScreen.kt)
+- Tela Compose com seletor de clube, seletor SAF de diretório e progresso.
+
+### Navigation & UI Integration
+
+#### [MODIFY] [LegacyDestination.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/navigation/LegacyDestination.kt)
+- Adicionar `ImportSquadFromFolder`.
+
+#### [MODIFY] [LegacyNavGraph.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/core/navigation/LegacyNavGraph.kt)
+- Registrar rota `ImportSquadFromFolder`.
+
+#### [MODIFY] [ClubProfileScreen.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/main/java/com/example/legacymasterliga/feature/clubprofile/presentation/ClubProfileScreen.kt)
+- Adicionar o botão "Importar pasta do clube" na aba **Elenco**.
+
+### Unit Tests
+
+#### [NEW] [ImportSquadFromFolderUseCaseTest.kt](file:///C:/Users/luizh/AndroidStudioProjects/LegacyMasterLiga/app/src/test/java/com/example/legacymasterliga/feature/attributes/domain/ImportSquadFromFolderUseCaseTest.kt)
+- Testes cobrindo importação de 2 jogadores, deleção do elenco antigo, suporte a nomes duplicados e descarte de arquivos não `.txt`.
 
 ---
 
 ## Plano de Verificação
 
 ### Automated Tests
-- Criar `ClubBadgeConfigTest.kt` para validar a codificação/decodificação e tratamento dos valores de fallback padrão.
-- Executar os testes unitários via Gradle: `gradle_build("app:assembleDebug")`
+- Executar a suíte de testes unitários: `ImportSquadFromFolderUseCaseTest.kt`.
+- Executar compilação via Gradle: `gradle_build("app:assembleDebug")`.
 
 ### Manual Verification & Build
 - Executar Clean e Rebuild (`clean app:assembleDebug`).

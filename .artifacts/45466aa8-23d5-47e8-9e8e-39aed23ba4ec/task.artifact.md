@@ -1,16 +1,11 @@
-# Task List - Sistema Vetorial de Escudos (`ClubBadge`)
+# Task List - Importação de Elenco por Pasta (`ImportSquadFromFolderScreen`)
 
-- [x] Commit e push inicial (antes das alterações de código)
-- [x] Criar `ClubBadgeConfig.kt` (modelo de dados com `toJson`/`fromJson`, extração de inicial e valores padrão)
-- [x] Criar `BadgeShapeDrawer.kt` (desenhador de formas: `shield`, `circle`, `diamond`, `hexagon`, `crest`)
-- [x] Criar `BadgePatternDrawer.kt` (desenhador de padrões: `solid`, `vertical_stripes`, `horizontal_stripes`, `diagonal_stripes`, `half`, `cross`, `central_circle`)
-- [x] Criar `BadgeSymbolDrawer.kt` (desenhador de símbolos: `initial` [1ª letra], `star`, `crown`, `lightning`, `ball`, `tree`, `none`)
-- [x] Criar `ClubBadge.kt` (Composable principal do escudo vetorial)
-- [x] Atualizar `ClubEntity.kt`, `Club.kt`, `ClubDao.kt`, `DomainMappers.kt` para adicionar a nova coluna `badgeConfigJson`
-- [x] Incrementar `DatabaseContract.VERSION` para `32` em `AppDatabase.kt` e adicionar `migration31To32` em `DatabaseModule.kt`
-- [x] Atualizar `NativeCrest.kt` para delegar ao novo `ClubBadge` mantendo compatibilidade
-- [x] Atualizar o editor de clube em `ClubsScreen.kt` (`ClubEditorDialog`) com o novo editor visual e preview em tempo real
-- [x] Aplicar `ClubBadge` com dimensões padronizadas nas telas (Lista: 40.dp, Perfil: 80.dp, Jogos: 32.dp, Classificação: 24.dp)
-- [x] Criar testes unitários em `ClubBadgeConfigTest.kt`
-- [x] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
-- [x] Criar walkthrough e executar commit e push final no GitHub ("feat: sistema vetorial de escudos ClubBadge, coluna badgeConfigJson, migração v32 e editor visual")
+- [/] Commit e push inicial (antes das alterações de código)
+- [ ] Criar `Pes6PlayerTextParser.kt` (parser com suporte a arquivos mínimos/completos, atributos faltantes padrão 50 e Foot/Height nulos)
+- [ ] Atualizar `PlayerDao.kt`, `PlayerRepository.kt` e `RoomPlayerRepository.kt` (adicionar `deleteByClub` e verificação de partidas jogadas no clube)
+- [ ] Criar `ImportSquadFromFolderUseCase.kt` (verificação de partidas, transação atômica Room, leitura via SAF DocumentFile e relatório de importados/ignorados/erros)
+- [ ] Criar `ImportSquadFromFolderViewModel.kt` e `ImportSquadFromFolderScreen.kt` (interface Compose com seletor de clube, acionamento SAF `ACTION_OPEN_DOCUMENT_TREE`, progresso e relatório)
+- [ ] Integrar rota em `LegacyDestination.kt`, `LegacyNavGraph.kt` e adicionar o botão na aba Elenco de `ClubProfileScreen.kt`
+- [ ] Criar testes unitários em `ImportSquadFromFolderUseCaseTest.kt`
+- [ ] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
+- [ ] Criar walkthrough e executar commit e push final no GitHub ("feat: importação de elenco por pasta TXT (SAF), parser PES6 e substituição atômica de elenco")
