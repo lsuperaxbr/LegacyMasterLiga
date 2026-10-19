@@ -1,46 +1,42 @@
-# Walkthrough - Sistema Vetorial de Escudos (`ClubBadge`)
+# Walkthrough - Importação de Elenco por Pasta (`ImportSquadFromFolderScreen`)
 
-Evolução do sistema de escudos do aplicativo **Legacy Master Liga**, substituindo o renderizador antigo por um motor vetorial leve baseado em Jetpack Compose Canvas, com suporte a 5 formas geométricas, 7 padrões visuais, paletas de cores, 7 símbolos centrais (incluindo a 1ª letra maiúscula do clube) e armazenamento em JSON na coluna `badgeConfigJson`.
-
----
-
-## O Que Foi Criado e Atualizado
-
-### 1. Modelo de Dados e Banco Room (`ClubBadgeConfig.kt`, `AppDatabase.kt` & `DatabaseModule.kt`)
-- **`ClubBadgeConfig`:** Estrutura de dados com `shape`, `pattern`, `primaryColor`, `secondaryColor`, `accentColor` e `symbol`.
-- **Valores Padrão Automáticos:** Para clubes sem configuração: `shape = "shield"`, `pattern = "solid"`, `primaryColor = "#808080"`, `secondaryColor = "#FFFFFF"`, `accentColor = "#000000"`, `symbol = "initial"`.
-- **Coluna no Banco (`badgeConfigJson`):** Adicionada a coluna `badgeConfigJson TEXT` na tabela `clubs`.
-- **Migração de Banco (`MIGRATION_31_32`):** Versão do banco incrementada para `32` em `DatabaseContract.VERSION` com comando `ALTER TABLE clubs ADD COLUMN badgeConfigJson TEXT DEFAULT NULL`.
+Implementação concluída da funcionalidade de **Importação de Elenco por Pasta**, permitindo selecionar uma pasta com múltiplos arquivos `.txt` de atletas usando o Storage Access Framework (SAF) nativo do Android, com substituição atômica de elenco via transação no Room, trava de segurança para clubes com partidas já jogadas e parser resiliente de fichas PES 6.
 
 ---
 
-### 2. Componentes Vetoriais (`Canvas`)
-- **`BadgeShapeDrawer.kt`:** Desenha as 5 formas (`shield`, `circle`, `diamond`, `hexagon`, `crest`).
-- **`BadgePatternDrawer.kt`:** Aplica os 7 padrões visuais com clipping (`solid`, `vertical_stripes`, `horizontal_stripes`, `diagonal_stripes`, `half`, `cross`, `central_circle`).
-- **`BadgeSymbolDrawer.kt`:** Desenha os 7 símbolos centrais (`initial` [1ª letra], `star`, `crown`, `lightning`, `ball`, `tree`, `none`).
-- **`ClubBadge.kt`:** Composable unificado com preenchimento, padrão, símbolo central, borda e texto inicial.
+## O Que Foi Alterado e Implementado
+
+### 1. Parser de Fichas de Atletas (`Pes6PlayerTextParser.kt`)
+- Suporta arquivos `.txt` completos (com os 26 atributos numéricos do PES 6) e arquivos mínimos (ex: contendo apenas `Name`, `Position`, `OVR`, `Age`, `Foot`, `Height`).
+- **Tratamento de Atributos Faltantes:** Atributos ausentes recebem automaticamente o valor padrão `50`.
+- **Campos Opcionais (`Foot` e `Height`):** Se ausentes, em branco ou fora do intervalo válido (100 a 250 cm), são salvos como `null`.
+- **Normalização de Chaves:** Invariável a variações como `Dribble_Accuracy`, `Dribble Accuracy` e `dribbleAccuracy`.
 
 ---
 
-### 3. Editor Visual de Escudo (`ClubsScreen.kt`)
-- Subpreenchimento do diálogo `ClubEditorDialog` acessado ao clicar no lápis do clube.
-- Controles interativos para forma, padrão, paleta compacta de cores e símbolo central.
-- **Preview ao vivo em tempo real** mostrando o escudo renderizado instantaneamente conforme as opções são selecionadas.
+### 2. Caso de Uso e Banco Room (`ImportSquadFromFolderUseCase.kt` & `PlayerDao.kt`)
+- **Trava de Segurança:** Verifica antes da importação se o clube já possui partidas encerradas registradas (`hasClubPlayedMatches`). Se sim, bloqueia a operação e avisa: *"Não é possível importar elenco porque o clube já possui partidas registradas."*
+- **Transação Atômica Room:** Envolve a remoção do elenco antigo (`deleteByClub`) e a inserção dos novos jogadores em uma única transação atômica (`database.withTransaction`).
+- **Suporte a Nomes Duplicados:** Jogadores com nomes idênticos no mesmo clube são criados como registros independentes com novos IDs primários.
+- **Relatório Completo:** Retorna contagem de jogadores importados, arquivos não `.txt` ignorados e lista com o nome dos arquivos que falharam.
 
 ---
 
-### 4. Tamanhos Padronizados nas Telas
-- **Lista de clubes (`ClubsScreen`):** `40.dp`
-- **Perfil do clube (`ClubProfileScreen`):** `80.dp`
-- **Jogos / Rodada (`ScheduleScreen` / `Dashboard`):** `32.dp`
-- **Tabela de Classificação (`StandingsScreen`):** `24.dp`
+### 3. Interface e Navegação Jetpack Compose
+- **Tela:** `ImportSquadFromFolderScreen.kt` & `ImportSquadFromFolderViewModel.kt`.
+- **Seleção de Pasta Nativa (SAF):** Utiliza `ActivityResultContracts.OpenDocumentTree()` sem requerer a permissão legada `READ_EXTERNAL_STORAGE`.
+- **Relatório Final no Card UI:** Exibe o número de jogadores importados, arquivos ignorados e lista de arquivos com erro.
+- **Ponto de Acesso:** Botão com ícone de pasta na aba **Elenco** da tela de perfil do clube (`ClubProfileScreen.kt`).
+- **Navegação:** Registrada a rota `ImportSquadFromFolder` (`"import_squad_from_folder?clubId={clubId}"`) em `LegacyDestination.kt` e `LegacyNavGraph.kt`.
 
 ---
 
-### 5. Testes Automatizados (`ClubBadgeConfigTest.kt`)
-- Valida os valores padrão de fallback.
-- Valida a extração da 1ª letra em maiúsculo (ex: `"Athletico Paranaense"` $\rightarrow$ `"A"` e `"Manchester United"` $\rightarrow$ `"M"`).
-- Valida a serialização e desserialização de/para JSON (`toJson` / `fromJson`).
+### 4. Testes Automatizados (`ImportSquadFromFolderUseCaseTest.kt`)
+- Valida o parsing de arquivos mínimos com valor padrão `50` para atributos ausentes.
+- Valida o parsing de arquivos completos mantendo atributos personalizados.
+- Valida a transação de importação simulada limpando o elenco antigo (`deleteByClub`).
+- Valida que jogadores com nomes idênticos são criados com IDs únicos.
+- Valida que arquivos que não possuem extensão `.txt` são ignorados.
 
 ---
 

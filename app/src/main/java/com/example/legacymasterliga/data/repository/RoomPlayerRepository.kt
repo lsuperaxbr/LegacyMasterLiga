@@ -42,6 +42,8 @@ class RoomPlayerRepository @Inject constructor(
             externalPlayerId = player.externalPlayerId,
             attributesRaw = player.attributesRaw,
             overall = player.overall,
+            heightCm = player.heightCm,
+            preferredFoot = player.preferredFoot,
             updatedAt = System.currentTimeMillis()
         )
         return if (entity.id == 0L) {
@@ -62,5 +64,13 @@ class RoomPlayerRepository @Inject constructor(
 
     override suspend fun deletePlayer(playerId: Long) {
         playerDao.deleteById(playerId)
+    }
+
+    override suspend fun deletePlayersByClub(clubId: Long) {
+        playerDao.deleteByClub(clubId)
+    }
+
+    override suspend fun hasClubPlayedMatches(clubId: Long): Boolean {
+        return playerDao.countPlayedMatchesByClub(clubId) > 0
     }
 }

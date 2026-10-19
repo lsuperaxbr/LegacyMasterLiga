@@ -74,4 +74,10 @@ interface PlayerDao {
 
     @Query("DELETE FROM players WHERE id = :playerId")
     suspend fun deleteById(playerId: Long)
+
+    @Query("DELETE FROM players WHERE clubId = :clubId")
+    suspend fun deleteByClub(clubId: Long)
+
+    @Query("SELECT COUNT(*) FROM matches WHERE (homeClubId = :clubId OR awayClubId = :clubId) AND status = 'FINISHED'")
+    suspend fun countPlayedMatchesByClub(clubId: Long): Int
 }

@@ -17,4 +17,6 @@ interface PlayerRepository {
     suspend fun updateMarketStatus(playerId: Long, status: MarketStatus, price: Long?)
     suspend fun updateClubPlayersMarket(clubId: Long, status: MarketStatus, price: Long?)
     suspend fun deletePlayer(playerId: Long)
+    suspend fun deletePlayersByClub(clubId: Long)
+    suspend fun hasClubPlayedMatches(clubId: Long): Boolean
 }
