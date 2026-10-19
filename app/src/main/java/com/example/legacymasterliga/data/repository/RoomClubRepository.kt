@@ -118,12 +118,14 @@ class RoomClubRepository @Inject constructor(
             }
         }
 
+        val resolvedBadgeJson = badgeConfigJson ?: (if (crestUri?.startsWith("{") == true) crestUri else current.badgeConfigJson)
+
         clubDao.update(
             current.copy(
                 leagueId = leagueId,
                 name = name.trim(),
                 crestUri = crestUri,
-                badgeConfigJson = badgeConfigJson ?: current.badgeConfigJson,
+                badgeConfigJson = resolvedBadgeJson,
                 presidentUserId = presidentUserId,
                 updatedAt = System.currentTimeMillis(),
             ),

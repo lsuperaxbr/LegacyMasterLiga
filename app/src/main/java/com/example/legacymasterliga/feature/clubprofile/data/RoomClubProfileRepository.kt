@@ -26,6 +26,7 @@ class RoomClubProfileRepository @Inject constructor(
                     leagueId = it.leagueId,
                     clubName = it.clubName,
                     crestUri = it.crestUri,
+                    badgeConfigJson = it.badgeConfigJson,
                     presidentUserId = it.presidentUserId,
                     presidentName = it.presidentName,
                     isActive = it.isActive,

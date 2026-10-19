@@ -112,6 +112,7 @@ fun ClubProfileScreen(
             ClubHeader(
                 name = header.clubName,
                 crestUri = header.crestUri,
+                badgeConfigJson = header.badgeConfigJson,
                 presidentName = header.presidentName,
                 isActive = header.isActive,
             )
@@ -815,6 +816,7 @@ private fun AddPlayerDialog(
 private fun ClubHeader(
     name: String,
     crestUri: String?,
+    badgeConfigJson: String?,
     presidentName: String?,
     isActive: Boolean,
 ) {
@@ -826,7 +828,7 @@ private fun ClubHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            ClubCrest(name, crestUri, Modifier.size(80.dp))
+            ClubCrest(name, crestUri, badgeConfigJson, Modifier.size(80.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -844,8 +846,8 @@ private fun ClubHeader(
 }
 
 @Composable
-private fun ClubCrest(name: String, crestUri: String?, modifier: Modifier = Modifier) {
-    NativeCrest(clubName = name, crestRaw = crestUri, modifier = modifier)
+private fun ClubCrest(name: String, crestUri: String?, badgeConfigJson: String? = null, modifier: Modifier = Modifier) {
+    NativeCrest(clubName = name, crestRaw = crestUri, modifier = modifier, badgeConfigJson = badgeConfigJson)
 }
 
 @Composable

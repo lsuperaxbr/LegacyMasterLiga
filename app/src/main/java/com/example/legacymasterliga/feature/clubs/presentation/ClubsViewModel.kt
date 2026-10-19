@@ -95,9 +95,23 @@ class ClubsViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 if (clubId == null) {
-                    clubRepository.create(leagueId, normalizedName, crestUri, presidentUserId, initialBalance)
+                    clubRepository.create(
+                        leagueId = leagueId,
+                        name = normalizedName,
+                        crestUri = crestUri,
+                        presidentUserId = presidentUserId,
+                        initialBalance = initialBalance,
+                        badgeConfigJson = crestUri,
+                    )
                 } else {
-                    clubRepository.update(clubId, leagueId, normalizedName, crestUri, presidentUserId)
+                    clubRepository.update(
+                        clubId = clubId,
+                        leagueId = leagueId,
+                        name = normalizedName,
+                        crestUri = crestUri,
+                        presidentUserId = presidentUserId,
+                        badgeConfigJson = crestUri,
+                    )
                 }
             }.onSuccess {
                 feedback.value = ClubFeedback.Success(if (clubId == null) "Clube criado com sucesso." else "Clube atualizado com sucesso.")

@@ -5,6 +5,7 @@ data class ClubProfileHeaderRow(
     val leagueId: Long,
     val clubName: String,
     val crestUri: String?,
+    val badgeConfigJson: String?,
     val presidentUserId: Long?,
     val presidentName: String?,
     val isActive: Boolean,

@@ -32,6 +32,7 @@ interface ClubDao {
                clubs.leagueId AS leagueId,
                clubs.name AS clubName,
                clubs.crestUri AS crestUri,
+               clubs.badgeConfigJson AS badgeConfigJson,
                clubs.presidentUserId AS presidentUserId,
                users.displayName AS presidentName,
                clubs.isActive AS isActive
