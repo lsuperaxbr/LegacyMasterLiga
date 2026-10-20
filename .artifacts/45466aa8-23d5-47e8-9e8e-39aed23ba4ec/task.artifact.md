@@ -1,10 +1,8 @@
-# Task List - Correção da Persistência do Escudo Vetorial (`ClubBadge`)
+# Task List - Correção do Parser `Pes6PlayerTextParser.kt`
 
-- [x] Commit e push inicial (antes das alterações de código)
-- [x] Atualizar `ClubsViewModel.kt` (passar `badgeConfigJson = crestUri` em `saveClub`)
-- [x] Atualizar `RoomClubRepository.kt` (manger fallback para `badgeConfigJson` se nulo)
-- [x] Atualizar `ClubProfileHeaderRow.kt`, `ClubDao.kt`, `ClubProfileModels.kt` e `RoomClubProfileRepository.kt` (incluir `badgeConfigJson` no cabeçalho do perfil)
-- [x] Atualizar `ClubProfileScreen.kt` (repassar `badgeConfigJson` para o `NativeCrest` no perfil do clube)
-- [x] Atualizar `OnlineSportsSyncManager.kt` (mapear `badgeConfigJson` no payload e applyClub do Firestore)
-- [x] Compilar e validar a aplicação (`Clean` -> `Rebuild` / `app:assembleDebug`)
-- [x] Criar walkthrough e executar commit e push final no GitHub ("fix(badge): correção da persistência do escudo vetorial badgeConfigJson no banco Room, ViewModel e sincronização Firestore")
+- [/] Commit e push inicial (antes das alterações de código)
+- [ ] Atualizar `Pes6PlayerTextParser.kt` com o `ALIAS_MAP` completo (sem abreviações ambíguas) cobrindo grafias americanas/britânicas, camelCase, snake_case e espaços
+- [ ] Implementar logs detalhados em `Pes6PlayerTextParser.kt` (`Log.d` para acertos e `Log.w` para chaves não reconhecidas)
+- [ ] Atualizar `ImportSquadFromFolderUseCaseTest.kt` testando individualmente os atributos históricos: `Defense`, `Dribble_Accuracy`, `Short_Pass_Accuracy`, `Long_Pass_Accuracy`, `Free_Kick_Accuracy`, `Shot_Accuracy`, `Shot_Power`, `GK_Skills`
+- [ ] Compilar e executar os testes automatizados (`Clean` -> `Rebuild` / `app:assembleDebug`)
+- [ ] Criar walkthrough e executar commit e push final no GitHub ("fix(parser): correção do Pes6PlayerTextParser com mapa completo de aliases para os 26 atributos PES 6")
