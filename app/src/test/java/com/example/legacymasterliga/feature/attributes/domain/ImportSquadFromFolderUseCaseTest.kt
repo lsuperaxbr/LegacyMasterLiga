@@ -1,11 +1,6 @@
 package com.example.legacymasterliga.feature.attributes.domain
 
-import com.example.legacymasterliga.core.database.dao.PlayerDao
 import com.example.legacymasterliga.core.database.entity.PlayerEntity
-import com.example.legacymasterliga.core.database.model.PlayerWithClub
-import com.example.legacymasterliga.core.model.MarketStatus
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -97,6 +92,33 @@ class ImportSquadFromFolderUseCaseTest {
         assertEquals("95", attrs[0]) // ATTACK
         assertEquals("92", attrs[4]) // SPEED
         assertEquals("98", attrs[8]) // DRIBBLE ACCURACY
+    }
+
+    @Test
+    fun `parser correctly maps historical problem attributes like Defense, Dribble_Accuracy, Short_Pass_Accuracy, etc to non-50 values`() {
+        val txt = """
+            Name: Virgil van Dijk
+            Defense: 89
+            Dribble_Accuracy: 78
+            Short_Pass_Accuracy: 84
+            Long_Pass_Accuracy: 86
+            Free_Kick_Accuracy: 75
+            Shot_Accuracy: 71
+            Shot_Power: 88
+            GK_Skills: 60
+        """.trimIndent()
+
+        val parsed = Pes6PlayerTextParser.parse(txt)
+        val attrs = parsed.attributesRaw.split(",").map { it.toInt() }
+
+        assertEquals(89, attrs[1])  // DEFENCE
+        assertEquals(78, attrs[8])  // DRIBBLE ACCURACY
+        assertEquals(84, attrs[10]) // SHORT PASS ACCURACY
+        assertEquals(86, attrs[12]) // LONG PASS ACCURACY
+        assertEquals(71, attrs[14]) // SHOT ACCURACY
+        assertEquals(88, attrs[15]) // SHOT POWER
+        assertEquals(75, attrs[17]) // FREE KICK ACCURACY
+        assertEquals(60, attrs[25]) // GK SKILLS
     }
 
     @Test
