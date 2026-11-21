@@ -58,7 +58,6 @@ sealed interface LegacyDestination {
     data object News : LegacyDestination { override val route = "news" }
     data object Users : LegacyDestination { override val route = "users" }
     data object Audit : LegacyDestination { override val route = "audit" }
-    data object Backup : LegacyDestination { override val route = "backup" }
     data object Settings : LegacyDestination { override val route = "settings" }
     data object LeagueSettings : LegacyDestination { override val route = "league_settings" }
     data object History : LegacyDestination { override val route = "history" }

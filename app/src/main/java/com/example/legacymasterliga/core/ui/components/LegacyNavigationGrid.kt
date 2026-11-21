@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Article
-import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Checklist
@@ -95,7 +94,6 @@ private fun LegacyMenuIcon.imageVector(): ImageVector = when (this) {
     LegacyMenuIcon.NOTIFICATIONS -> Icons.Outlined.Notifications
     LegacyMenuIcon.USERS -> Icons.Outlined.ManageAccounts
     LegacyMenuIcon.SETTINGS -> Icons.Outlined.Settings
-    LegacyMenuIcon.BACKUP -> Icons.Outlined.Backup
     LegacyMenuIcon.AUDIT -> Icons.Outlined.FactCheck
     LegacyMenuIcon.PERFORMANCE -> Icons.Outlined.Speed
     LegacyMenuIcon.EXPORT -> Icons.Outlined.FilePresent

@@ -29,7 +29,6 @@ enum class LegacyMenuIcon {
     NOTIFICATIONS,
     USERS,
     SETTINGS,
-    BACKUP,
     AUDIT,
     PERFORMANCE,
     EXPORT,
@@ -143,7 +142,6 @@ object LegacyNavigationMenu {
                     LegacyMenuSection(
                         title = "Sistema",
                         items = listOf(
-                            item("Backup", "Cópia e restauração dos dados", LegacyMenuIcon.BACKUP, LegacyDestination.Backup.route),
                             item("Auditoria", "Logs e rastreabilidade", LegacyMenuIcon.AUDIT, LegacyDestination.Audit.route),
                             item("Desempenho", "Métricas, cache e erros", LegacyMenuIcon.PERFORMANCE, LegacyDestination.Performance.route),
                             item("Exportação", "Relatórios PDF e CSV", LegacyMenuIcon.EXPORT, LegacyDestination.Reports.route),

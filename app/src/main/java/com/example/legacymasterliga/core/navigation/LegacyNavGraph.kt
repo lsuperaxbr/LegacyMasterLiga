@@ -14,7 +14,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.legacymasterliga.core.model.UserRole
 import com.example.legacymasterliga.feature.audit.presentation.AuditRoute
-import com.example.legacymasterliga.feature.backup.presentation.BackupRoute
 import com.example.legacymasterliga.feature.betaguide.presentation.BetaTestGuideScreen
 import com.example.legacymasterliga.feature.clubprofile.presentation.ClubProfileRoute
 import com.example.legacymasterliga.feature.clubs.presentation.ClubsRoute
@@ -280,9 +279,6 @@ fun LegacyNavGraph(rootViewModel: RootViewModel = hiltViewModel()) {
         }
         composable(LegacyDestination.Audit.route) {
             AuditRoute(onBack = navController::navigateUp)
-        }
-        composable(LegacyDestination.Backup.route) {
-            BackupRoute(onBack = navController::navigateUp)
         }
         composable(LegacyDestination.Settings.route) {
             SettingsRoute(

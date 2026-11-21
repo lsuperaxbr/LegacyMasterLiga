@@ -17,7 +17,7 @@ class NavigationSmokeTest {
             LegacyDestination.Clubs, LegacyDestination.ClubProfile, LegacyDestination.Participants,
             LegacyDestination.Schedule, LegacyDestination.Standings, LegacyDestination.Finance,
             LegacyDestination.Market, LegacyDestination.News, LegacyDestination.Users,
-            LegacyDestination.Audit, LegacyDestination.Backup, LegacyDestination.Settings,
+            LegacyDestination.Audit, LegacyDestination.Settings,
             LegacyDestination.History, LegacyDestination.HallOfFame, LegacyDestination.SeasonClosure,
             LegacyDestination.Statistics, LegacyDestination.Notifications, LegacyDestination.Reports,
             LegacyDestination.Performance, LegacyDestination.BetaTestGuide,

@@ -9,7 +9,6 @@ import com.example.legacymasterliga.core.database.dao.LeagueDao
 import com.example.legacymasterliga.core.database.dao.OnlineSyncDao
 import com.example.legacymasterliga.core.database.entity.FinancialTransactionEntity
 import com.example.legacymasterliga.feature.audit.domain.AuditLogger
-import com.example.legacymasterliga.feature.backup.domain.BackupRepository
 import com.google.firebase.firestore.FirebaseFirestore
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,7 +29,6 @@ class ResetLeagueUseCase @Inject constructor(
     private val clubDao: ClubDao,
     private val financialDao: FinancialDao,
     private val syncDao: OnlineSyncDao,
-    private val backupRepository: BackupRepository,
     private val firestore: FirebaseFirestore,
     private val auditLogger: AuditLogger,
 ) {
@@ -42,11 +40,6 @@ class ResetLeagueUseCase @Inject constructor(
                 return@withContext ResetLeagueResult.Error(
                     "Existem $pendingCount operações de sincronização pendentes. Sincronize antes de resetar a liga."
                 )
-            }
-
-            // 2. BACKUP AUTOMÁTICO: Gera backup de segurança do estado atual do app.
-            backupRepository.createManualBackup().onFailure { error ->
-                Log.w(TAG, "Falha ao criar backup automático de pré-reset", error)
             }
 
             val league = leagueDao.findById(leagueId)

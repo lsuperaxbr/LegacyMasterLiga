@@ -6,7 +6,6 @@ import com.example.legacymasterliga.core.database.AppDatabase
 import com.example.legacymasterliga.core.database.dao.LeagueDao
 import com.example.legacymasterliga.core.database.dao.OnlineSyncDao
 import com.example.legacymasterliga.feature.audit.domain.AuditLogger
-import com.example.legacymasterliga.feature.backup.domain.BackupRepository
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -34,7 +33,6 @@ class DeleteLeagueUseCase @Inject constructor(
     private val database: AppDatabase,
     private val leagueDao: LeagueDao,
     private val syncDao: OnlineSyncDao,
-    private val backupRepository: BackupRepository,
     private val firestore: FirebaseFirestore,
     private val auditLogger: AuditLogger,
 ) {
@@ -58,11 +56,6 @@ class DeleteLeagueUseCase @Inject constructor(
 
             val targetLeague = leagueDao.findById(targetLeagueId)
                 ?: return@withContext DeleteLeagueResult.Error("Liga não encontrada.")
-
-            // 3. BACKUP AUTOMÁTICO: Gera backup de segurança do estado atual do app.
-            backupRepository.createManualBackup().onFailure { error ->
-                Log.w(TAG, "Falha ao criar backup automático de pré-exclusão", error)
-            }
 
             val cloudId = targetLeague.cloudLeagueId
 

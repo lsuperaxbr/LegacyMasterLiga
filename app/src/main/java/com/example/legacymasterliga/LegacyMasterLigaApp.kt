@@ -7,8 +7,6 @@ import com.example.legacymasterliga.domain.usecase.InitializeDemoDataUseCase
 import com.example.legacymasterliga.core.error.AppErrorReporter
 import com.example.legacymasterliga.core.network.FirebaseConnectionChecker
 import com.example.legacymasterliga.core.performance.PerformanceMonitor
-import com.example.legacymasterliga.feature.backup.domain.BackupRepository
-import com.example.legacymasterliga.feature.backup.domain.BackupScheduler
 import com.example.legacymasterliga.feature.online.domain.OnlineLoginService
 import com.example.legacymasterliga.feature.online.sync.OnlineSportsSyncManager
 import dagger.hilt.android.HiltAndroidApp
@@ -30,8 +28,6 @@ class LegacyMasterLigaApp : Application() {
     @Inject
     lateinit var adminLeagueSetup: com.example.legacymasterliga.domain.usecase.AdminLeagueSetupUseCase
 
-    @Inject lateinit var backupRepository: BackupRepository
-    @Inject lateinit var backupScheduler: BackupScheduler
     @Inject lateinit var errorReporter: AppErrorReporter
     @Inject lateinit var performanceMonitor: PerformanceMonitor
     @Inject lateinit var firebaseChecker: FirebaseConnectionChecker
@@ -76,7 +72,6 @@ class LegacyMasterLigaApp : Application() {
         }
 
         super.onCreate()
-        backupScheduler.apply(backupRepository.getAutomaticFrequency())
         
         firebaseChecker.checkConnection()
         applicationScope.launch {
