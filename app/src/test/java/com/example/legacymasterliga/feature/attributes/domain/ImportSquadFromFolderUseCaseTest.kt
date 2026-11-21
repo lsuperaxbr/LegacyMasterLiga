@@ -122,6 +122,29 @@ class ImportSquadFromFolderUseCaseTest {
     }
 
     @Test
+    fun `parser converts positions and preferred foot variations and handles accented keys`() {
+        // "Posição: Zagueiro" -> "ZAG"
+        val p1 = Pes6PlayerTextParser.parse("Name: Thiago Silva\nPosição: Zagueiro\nPé: Destro")
+        assertEquals("ZAG", p1.position)
+        assertEquals("R", p1.preferredFoot)
+
+        // "Position: CB" -> "ZAG"
+        val p2 = Pes6PlayerTextParser.parse("Name: Marquinhos\nPosition: CB\nFoot: Left")
+        assertEquals("ZAG", p2.position)
+        assertEquals("L", p2.preferredFoot)
+
+        // "Posição: MEI" (com acento) -> "MEI"
+        val p3 = Pes6PlayerTextParser.parse("Name: Lucas Paqueta\nPosição: MEI\nPé: Canhoto")
+        assertEquals("MEI", p3.position)
+        assertEquals("L", p3.preferredFoot)
+
+        // Position e Foot ausentes -> null
+        val p4 = Pes6PlayerTextParser.parse("Name: Jogador Anonimo")
+        assertEquals(null, p4.position)
+        assertEquals(null, p4.preferredFoot)
+    }
+
+    @Test
     fun `simulated folder import wipes old squad and inserts players including duplicate names as separate records`() = runBlocking {
         // Simulação da lógica da transação de importação
         val clubId = 10L

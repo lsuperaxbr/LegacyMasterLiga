@@ -1,6 +1,7 @@
 package com.example.legacymasterliga.feature.attributes.domain
 
 import android.util.Log
+import java.text.Normalizer
 
 data class ParsedPes6Player(
     val name: String,
@@ -28,7 +29,7 @@ object Pes6PlayerTextParser {
     val ALIAS_MAP = mapOf(
         // Header info
         "name" to "NAME", "playername" to "NAME",
-        "position" to "POSITION", "pos" to "POSITION",
+        "position" to "POSITION", "pos" to "POSITION", "posicao" to "POSITION",
         "ovr" to "OVR", "overall" to "OVR",
         "age" to "AGE", "idade" to "AGE",
         "foot" to "FOOT", "pe" to "FOOT", "pedominante" to "FOOT", "preferredfoot" to "FOOT",
@@ -64,7 +65,62 @@ object Pes6PlayerTextParser {
     )
 
     private fun normalizeKey(key: String): String {
-        return key.lowercase().replace("_", "").replace(" ", "").trim()
+        val unaccented = Normalizer.normalize(key, Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        return unaccented.lowercase()
+            .replace("_", "")
+            .replace(" ", "")
+            .replace("-", "")
+            .trim()
+    }
+
+    fun convertPosition(raw: String?): String? {
+        val rawClean = raw?.trim() ?: return null
+        if (rawClean.isBlank()) return null
+        val unaccented = Normalizer.normalize(rawClean, Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        val clean = unaccented.uppercase().replace("-", " ").trim()
+
+        val converted = when {
+            clean in listOf("GK", "GOL", "GOLEIRO") -> "GOL"
+            clean in listOf("CB", "ZAG", "ZAGUEIRO", "DF", "SW") -> "ZAG"
+            clean in listOf("LB", "LE", "LATERAL ESQUERDO", "LATERALESQUERDO", "LEFT BACK") -> "LE"
+            clean in listOf("RB", "LD", "LATERAL DIREITO", "LATERALDIREITO", "RIGHT BACK") -> "LD"
+            clean in listOf("LAT", "LATERAL", "SB", "LWB", "RWB") -> "LD" // "Lateral" sozinho -> LD (padrão)
+            clean in listOf("DM", "VOL", "VOLANTE", "DMC") -> "VOL"
+            clean in listOf("CM", "MC", "MEIO", "MEIO CAMPO", "MEIOCAMPO", "CENTRAL MIDFIELDER") -> "MC"
+            clean in listOf("AM", "MEI", "AMC", "MAT", "CAM", "MEIA ATACANTE", "MEIAATACANTE") -> "MEI"
+            clean in listOf("RM", "MD", "MEIA DIREITA", "MEIADIREITA") -> "MD"
+            clean in listOf("LM", "ME", "MEIA ESQUERDA", "MEIAESQUERDA") -> "ME"
+            clean in listOf("RW", "RWF", "PD", "PONTA DIREITA", "PONTADIREITA") -> "PD"
+            clean in listOf("LW", "LWF", "PE", "PONTA ESQUERDA", "PONTAESQUERDA") -> "PE"
+            clean in listOf("SS", "SA", "SEGUNDO ATACANTE", "SEGUNDOATACANTE") -> "SA"
+            clean in listOf("ST", "CF", "CA", "ATA", "ATACANTE", "FW", "CENTROAVANTE") -> "CA"
+            else -> {
+                val validPositions = setOf("GOL", "ZAG", "LD", "LE", "VOL", "MC", "MEI", "MD", "ME", "PD", "PE", "SA", "CA", "ATA")
+                if (clean in validPositions) clean else null
+            }
+        }
+        runCatching { Log.d(TAG, "Posição convertida: bruto='$raw', convertido='$converted'") }
+        return converted
+    }
+
+    fun convertFoot(raw: String?): String? {
+        val rawClean = raw?.trim() ?: return null
+        if (rawClean.isBlank()) return null
+        val unaccented = Normalizer.normalize(rawClean, Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        val clean = unaccented.uppercase().trim()
+
+        val converted = when {
+            clean in listOf("R", "RIGHT", "DIREITO", "D", "DESTRO") -> "R"
+            clean in listOf("L", "LEFT", "CANHOTO", "ESQUERDO", "E") -> "L"
+            clean.startsWith("DESTRO") || clean.startsWith("DIREIT") -> "R"
+            clean.startsWith("CANHOT") || clean.startsWith("ESQUERD") -> "L"
+            else -> null
+        }
+        runCatching { Log.d(TAG, "Pé dominante convertido: bruto='$raw', convertido='$converted'") }
+        return converted
     }
 
     fun parse(text: String, defaultName: String = "Jogador Sem Nome"): ParsedPes6Player {
@@ -97,18 +153,15 @@ object Pes6PlayerTextParser {
 
         // Header info
         val parsedName = parsedValues["NAME"]?.takeIf { it.isNotBlank() } ?: defaultName
-        val position = parsedValues["POSITION"]?.ifBlank { null }
+        val rawPosition = parsedValues["POSITION"]
+        val position = convertPosition(rawPosition)
+
         val overall = parsedValues["OVR"]?.toIntOrNull()
         val age = parsedValues["AGE"]?.toIntOrNull()
 
         // Foot validation
         val rawFoot = parsedValues["FOOT"]
-        val preferredFoot = when {
-            rawFoot == null || rawFoot.isBlank() -> null
-            rawFoot.equals("R", ignoreCase = true) || rawFoot.startsWith("D", ignoreCase = true) || rawFoot.contains("Right", ignoreCase = true) -> "R"
-            rawFoot.equals("L", ignoreCase = true) || rawFoot.startsWith("C", ignoreCase = true) || rawFoot.startsWith("E", ignoreCase = true) || rawFoot.contains("Left", ignoreCase = true) -> "L"
-            else -> null
-        }
+        val preferredFoot = convertFoot(rawFoot)
 
         // Height validation
         val rawHeight = parsedValues["HEIGHT"]
